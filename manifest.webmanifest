@@ -1,0 +1,23 @@
+{
+  "id": "/?source=monkey-forest",
+  "name": "Monkey Forest",
+  "short_name": "MonkeyForest",
+  "description": "Race other monkeys to grab the most bananas in the forest!",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e3a1c",
+  "theme_color": "#1f7a3a",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["games", "kids", "entertainment"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

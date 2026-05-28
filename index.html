@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Monkey Forest</title>
+  <meta name="theme-color" content="#1f7a3a" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <style>
+    :root { color-scheme: light; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #0e3a1c; overflow: hidden;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      user-select: none; -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none; overscroll-behavior: none;
+    }
+    #game { display: block; width: 100vw; height: 100vh; touch-action: none; }
+    #hud {
+      position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0;
+      display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;
+      padding: 8px; pointer-events: none; z-index: 2;
+    }
+    .score {
+      background: rgba(0, 0, 0, 0.55); color: #fff; font-weight: 700;
+      padding: 5px 10px; border-radius: 999px; font-size: 14px;
+      display: inline-flex; align-items: center; gap: 4px; backdrop-filter: blur(6px);
+    }
+    .score.hero { background: #ff9f1c; color: #1a1a1a; }
+    .score.shielded { box-shadow: 0 0 0 2px #66ccff, 0 0 10px #66ccff; }
+    #timer {
+      position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px);
+      left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.55); color: #fff; padding: 4px 12px;
+      border-radius: 999px; font-size: 14px; font-weight: 700;
+      z-index: 2; pointer-events: none; backdrop-filter: blur(6px);
+    }
+    #controls {
+      position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      left: 12px; right: 12px;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      pointer-events: none; z-index: 3;
+    }
+    .btn-wrap { position: relative; }
+    .btn {
+      pointer-events: auto;
+      background: rgba(0,0,0,0.55); color: #fff; border: 2px solid rgba(255,255,255,0.25);
+      width: 56px; height: 56px; border-radius: 50%; font-size: 26px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; backdrop-filter: blur(6px);
+      transition: transform 0.06s ease, opacity 0.15s ease;
+      padding: 0;
+    }
+    .btn:active { transform: scale(0.94); }
+    .btn[disabled] { opacity: 0.35; filter: grayscale(0.5); cursor: not-allowed; }
+    .badge {
+      position: absolute; top: -4px; right: -4px;
+      background: #ff5b3a; color: #fff; font-size: 11px; font-weight: 800;
+      border-radius: 999px; padding: 1px 6px; line-height: 1.4;
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.6);
+    }
+    .btn-group { display: flex; gap: 8px; align-items: flex-end; }
+    #cam-label {
+      position: absolute; bottom: 60px; left: 0;
+      font-size: 11px; color: rgba(255,255,255,0.85); font-weight: 700;
+      background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 6px;
+      pointer-events: none; white-space: nowrap;
+    }
+    #overlay {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      background: rgba(0,0,0,0.7); color: #fff; text-align: center;
+      padding: 24px; z-index: 4;
+    }
+    #overlay.hidden { display: none; }
+    #overlay h1 { margin: 0; font-size: clamp(26px,6vw,44px); }
+    #overlay p { margin: 0; max-width: 34ch; font-size: clamp(13px,3.4vw,16px); opacity: 0.92; line-height: 1.4; }
+    #overlay button.start {
+      margin-top: 6px; background: #ff9f1c; color: #1a1a1a; border: none;
+      padding: 14px 28px; font-size: 20px; font-weight: 800; border-radius: 999px;
+      cursor: pointer; box-shadow: 0 6px 0 #b46e00, 0 10px 18px rgba(0,0,0,0.3);
+    }
+    #overlay button.start:active { transform: translateY(2px); box-shadow: 0 4px 0 #b46e00, 0 6px 10px rgba(0,0,0,0.3); }
+    .leaderboard {
+      display: flex; flex-direction: column; gap: 6px;
+      background: rgba(255,255,255,0.08); padding: 12px 18px;
+      border-radius: 16px; min-width: 240px;
+    }
+    .leaderboard .row { display: flex; justify-content: space-between; gap: 18px; font-size: 17px; }
+    .leaderboard .row.winner { color: #ffd166; font-weight: 800; }
+    #toast {
+      position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.78); color: #fff; padding: 8px 16px;
+      border-radius: 12px; font-weight: 700; font-size: 14px;
+      pointer-events: none; opacity: 0; transition: opacity 0.25s ease; z-index: 5;
+      max-width: 80vw; text-align: center;
+    }
+    #toast.show { opacity: 1; }
+    #joystick {
+      position: fixed; pointer-events: none; z-index: 3;
+      opacity: 0; transition: opacity 0.12s ease;
+    }
+    #joystick.active { opacity: 1; }
+    #joystick .base {
+      position: absolute; width: 110px; height: 110px;
+      border: 2px solid rgba(255,255,255,0.45); border-radius: 50%;
+      background: rgba(0,0,0,0.22); transform: translate(-50%, -50%);
+      backdrop-filter: blur(2px);
+    }
+    #joystick .stick {
+      position: absolute; width: 48px; height: 48px;
+      border: 2px solid rgba(255,255,255,0.9); border-radius: 50%;
+      background: rgba(255,159,28,0.65); transform: translate(-50%, -50%);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+  </style>
+  <script type="importmap">
+  { "imports": { "three": "./three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud"></div>
+  <div id="timer">60</div>
+  <div id="controls">
+    <div class="btn-wrap">
+      <button class="btn" id="camBtn" title="Cycle camera (C)">👁</button>
+      <div id="cam-label">TOP</div>
+    </div>
+    <div class="btn-group">
+      <div class="btn-wrap">
+        <button class="btn" id="freezeBtn" title="Freeze others (F)" disabled>❄️<span class="badge" id="freezeBadge" hidden>0</span></button>
+      </div>
+      <div class="btn-wrap">
+        <button class="btn" id="shieldBtn" title="Build house shield, 5🍌 (Space)" disabled>🛡️</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <div id="joystick"><div class="base"></div><div class="stick"></div></div>
+  <div id="overlay">
+    <h1>🐵 Monkey Forest</h1>
+    <p>Grab 🍌 from the forest <b>or</b> sneak into other monkeys' houses to steal — but watch out for their guards! Spend 5🍌 to 🛡 shield your home (5s). Grab ❄ to freeze everyone for 3s.</p>
+    <p style="opacity:0.7">Swipe to move (camera-relative) • WASD/Arrows • 👁 C cycles TOP / CHASE / CLOSE / ORBIT • ❄ F • 🛡 Space</p>
+    <button class="start" id="startBtn">Start</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ===== Tunables =====
+    const WORLD_SIZE = 60;
+    const HALF = WORLD_SIZE / 2;
+    const ROUND_SECONDS = 60;
+    const BANANA_FOREST_COUNT = 12;
+    const HERO_SPEED = 7.5;
+    const AI_SPEED = 5.8;
+    const GUARD_SPEED = 4.2;
+    const GUARD_PATROL_R = 3.2;
+    const GUARD_DETECT_R = 5.5;
+    const GUARD_CATCH_R = 1.1;
+    const SHIELD_DURATION = 5.0;
+    const SHIELD_COST = 5;
+    const FREEZE_DURATION = 3.0;
+    const STUN_DURATION = 1.2;
+    const HOUSE_WALL_HALF = 2.2;
+    const STEAL_RADIUS = 2.8;
+    const MONKEY_RADIUS = 0.65;
+    const BANANA_RADIUS = 0.5;
+    const FREEZE_PICKUP_R = 0.9;
+    const CAMS = ['TOP', 'CHASE', 'CLOSE', 'ORBIT'];
+    const SWIPE_DEADZONE = 14;   // px — below this, no movement
+    const SWIPE_MAX = 70;        // px — full-speed swipe radius (joystick visual)
+
+    const SPAWN = [
+      { id:'hero', name:'You',   color:0xff9f1c, emoji:'🐵', isHero:true,  homeX:  HALF*0.62, homeZ:  HALF*0.62 },
+      { id:'ai1',  name:'Rex',   color:0xff5b3a, emoji:'🐒', isHero:false, homeX: -HALF*0.62, homeZ:  HALF*0.62 },
+      { id:'ai2',  name:'Coco',  color:0x88ccff, emoji:'🙈', isHero:false, homeX: -HALF*0.62, homeZ: -HALF*0.62 },
+      { id:'ai3',  name:'Mango', color:0xc88aff, emoji:'🙉', isHero:false, homeX:  HALF*0.62, homeZ: -HALF*0.62 },
+    ];
+
+    // ===== DOM =====
+    const canvas = document.getElementById('game');
+    const hud = document.getElementById('hud');
+    const timerEl = document.getElementById('timer');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+    const camBtn = document.getElementById('camBtn');
+    const camLabel = document.getElementById('cam-label');
+    const shieldBtn = document.getElementById('shieldBtn');
+    const freezeBtn = document.getElementById('freezeBtn');
+    const freezeBadge = document.getElementById('freezeBadge');
+    const toast = document.getElementById('toast');
+    const joystick = document.getElementById('joystick');
+    const joystickBase = joystick.querySelector('.base');
+    const joystickStick = joystick.querySelector('.stick');
+
+    // ===== Renderer / Scene / Camera =====
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 32, 90);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 0.95);
+    sun.position.set(20, 30, 10);
+    scene.add(sun);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(WORLD_SIZE * 2, WORLD_SIZE * 2),
+      new THREE.MeshLambertMaterial({ color: 0x2fa055 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(WORLD_SIZE, 20, 0x1a6a3a, 0x1a6a3a);
+    grid.material.transparent = true;
+    grid.material.opacity = 0.18;
+    grid.position.y = 0.01;
+    scene.add(grid);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 220);
+    camera.position.set(0, 30, 0.01);
+    camera.lookAt(0, 0, 0);
+
+    // ===== Texture helpers =====
+    const _texCache = new Map();
+    function emojiTexture(emoji, size = 128) {
+      const key = `e:${emoji}:${size}`;
+      if (_texCache.has(key)) return _texCache.get(key);
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.font = `${size * 0.78}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, size/2, size/2 + size*0.04);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      _texCache.set(key, tex);
+      return tex;
+    }
+    function nameTexture(text, color) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d');
+      const hex = '#' + color.toString(16).padStart(6, '0');
+      ctx.fillStyle = hex;
+      const r = 14;
+      ctx.beginPath();
+      ctx.moveTo(r, 0); ctx.lineTo(256 - r, 0);
+      ctx.quadraticCurveTo(256, 0, 256, r); ctx.lineTo(256, 64 - r);
+      ctx.quadraticCurveTo(256, 64, 256 - r, 64); ctx.lineTo(r, 64);
+      ctx.quadraticCurveTo(0, 64, 0, 64 - r); ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = 'bold 30px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 34);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+    function makeSprite(texture, scale = 1) {
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+      const s = new THREE.Sprite(mat);
+      s.scale.set(scale, scale, scale);
+      return s;
+    }
+
+    // ===== Builders =====
+    function makeTree(x, z) {
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.25, 0.35, 1.6, 8),
+        new THREE.MeshLambertMaterial({ color: 0x6b4423 })
+      );
+      trunk.position.y = 0.8;
+      const canopyR = 1.2 + Math.random() * 0.7;
+      const canopy = new THREE.Mesh(
+        new THREE.SphereGeometry(canopyR, 10, 8),
+        new THREE.MeshLambertMaterial({ color: 0x2d7a3a })
+      );
+      canopy.position.y = 1.6 + canopyR * 0.55;
+      canopy.scale.y = 0.88;
+      g.add(trunk); g.add(canopy);
+      g.position.set(x, 0, z);
+      return g;
+    }
+
+    function makeHouse(spawn) {
+      const g = new THREE.Group();
+      const walls = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 2.5, 4),
+        new THREE.MeshLambertMaterial({ color: spawn.color })
+      );
+      walls.position.y = 1.25;
+      const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(3.2, 1.7, 4),
+        new THREE.MeshLambertMaterial({ color: 0x6a3a1a })
+      );
+      roof.position.y = 2.5 + 0.85;
+      roof.rotation.y = Math.PI / 4;
+      // door facing world center
+      const dirX = -Math.sign(spawn.homeX);
+      const dirZ = -Math.sign(spawn.homeZ);
+      const door = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 1.8),
+        new THREE.MeshBasicMaterial({ color: 0x2a1810, side: THREE.DoubleSide })
+      );
+      if (Math.abs(dirX) > Math.abs(dirZ)) {
+        door.position.set(dirX * 2.01, 0.9, 0);
+        door.rotation.y = dirX > 0 ? -Math.PI/2 : Math.PI/2;
+      } else {
+        door.position.set(0, 0.9, dirZ * 2.01);
+        door.rotation.y = dirZ > 0 ? 0 : Math.PI;
+      }
+      // banana stash visible inside doorway
+      const stashGroup = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const s = makeSprite(emojiTexture('🍌', 64), 0.45);
+        const ang = (i / 6) * Math.PI * 2;
+        s.position.set(Math.cos(ang) * 0.4, 0.3 + (i % 3) * 0.18, Math.sin(ang) * 0.4);
+        stashGroup.add(s);
+      }
+      stashGroup.position.set(dirX * 1.5, 0, dirZ * 1.5);
+      // Shield dome (initially hidden)
+      const shield = new THREE.Mesh(
+        new THREE.SphereGeometry(4.6, 24, 16, 0, Math.PI*2, 0, Math.PI/2),
+        new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
+      );
+      shield.visible = false;
+      // Name plate
+      const plate = makeSprite(nameTexture(spawn.name, spawn.color), 2.4);
+      plate.scale.y = 0.6;
+      plate.position.y = 5.1;
+      g.add(walls); g.add(roof); g.add(door); g.add(stashGroup); g.add(shield); g.add(plate);
+      g.position.set(spawn.homeX, 0, spawn.homeZ);
+      return { group: g, shield, stashGroup };
+    }
+
+    function makeMonkey(spawn) {
+      const g = new THREE.Group();
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.7, 18),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.02;
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.7, 0.95, 28),
+        new THREE.MeshBasicMaterial({ color: spawn.color, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.04;
+      const sprite = makeSprite(emojiTexture(spawn.emoji, 256), 1.8);
+      sprite.position.y = 1.05;
+      g.add(shadow); g.add(ring); g.add(sprite);
+      let hiRing = null;
+      if (spawn.isHero) {
+        hiRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.97, 1.18, 32),
+          new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide })
+        );
+        hiRing.rotation.x = -Math.PI / 2;
+        hiRing.position.y = 0.05;
+        g.add(hiRing);
+      }
+      return { group: g, sprite, ring, hiRing };
+    }
+
+    function makeGuard(spawn) {
+      const g = new THREE.Group();
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.45, 14),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+      );
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.02;
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.42, 0.56, 20),
+        new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.04;
+      const sprite = makeSprite(emojiTexture('🐵', 256), 1.15);
+      sprite.position.y = 0.65;
+      sprite.material.color.setHex(0xffe0e0); // pinkish tint to distinguish from main monkeys
+      g.add(shadow); g.add(ring); g.add(sprite);
+      return { group: g, sprite };
+    }
+
+    function makeBanana(x, z) {
+      const g = new THREE.Group();
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.32, 12),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+      );
+      shadow.rotation.x = -Math.PI/2;
+      shadow.position.y = 0.02;
+      const s = makeSprite(emojiTexture('🍌', 128), 0.95);
+      s.position.y = 0.55;
+      g.add(shadow); g.add(s);
+      g.position.set(x, 0, z);
+      g.userData = { bobPhase: Math.random() * Math.PI*2, sprite: s };
+      return g;
+    }
+
+    function makeFreezeItem(x, z) {
+      const g = new THREE.Group();
+      const shadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.4, 12),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+      );
+      shadow.rotation.x = -Math.PI/2;
+      shadow.position.y = 0.02;
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.55, 0.75, 24),
+        new THREE.MeshBasicMaterial({ color: 0x66ccff, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+      );
+      ring.rotation.x = -Math.PI/2;
+      ring.position.y = 0.05;
+      const s = makeSprite(emojiTexture('❄️', 128), 1.15);
+      s.position.y = 0.7;
+      g.add(shadow); g.add(ring); g.add(s);
+      g.position.set(x, 0, z);
+      g.userData = { bobPhase: Math.random() * Math.PI*2, sprite: s, ring };
+      return g;
+    }
+
+    // ===== State =====
+    let monkeys = [];
+    let guards = [];
+    let bananas = [];
+    let freezeItems = [];
+    let trees = [];
+    let houses = [];
+    let timeLeft = ROUND_SECONDS;
+    let elapsed = 0;
+    let running = false;
+    let freezeUntil = 0;
+    let lastT = 0;
+    let camMode = 0;
+    const orbit = { az: Math.PI/4, el: Math.PI/3.5, r: 28 };
+
+    const input = {
+      keys: new Set(),
+      pointerActive: false,
+      pointerId: null,
+      swipeStart: null,    // {x, y} screen coords where swipe started
+      swipeCurrent: null,  // {x, y} latest screen coords
+      lastDragX: 0, lastDragY: 0,  // for orbit-cam dragging
+    };
+
+    // ===== Camera-relative movement axes =====
+    // Returns unit vectors on the ground plane for "screen right" and "screen up"
+    // (the direction the hero should move when player swipes right / up).
+    const _camRight = new THREE.Vector3();
+    const _camUp = new THREE.Vector3();
+    const _camFwd = new THREE.Vector3();
+    function getMoveAxes() {
+      camera.matrixWorld.extractBasis(_camRight, _camUp, _camFwd);
+      // right on ground = camera local +X projected to XZ
+      let rx = _camRight.x, rz = _camRight.z;
+      let rLen = Math.hypot(rx, rz);
+      if (rLen < 1e-5) { rx = 1; rz = 0; rLen = 1; }
+      rx /= rLen; rz /= rLen;
+      // "forward" (screen-up direction in world) = camera local +Y projected to XZ.
+      // When camera looks straight forward (horizontal), this is degenerate, so fall back to -camFwd (look direction).
+      let fx = _camUp.x, fz = _camUp.z;
+      let fLen = Math.hypot(fx, fz);
+      if (fLen < 1e-5) { fx = -_camFwd.x; fz = -_camFwd.z; fLen = Math.hypot(fx, fz) || 1; }
+      fx /= fLen; fz /= fLen;
+      return { rx, rz, fx, fz };
+    }
+
+    function showJoystick(x, y) {
+      joystick.classList.add('active');
+      joystickBase.style.left = x + 'px';
+      joystickBase.style.top = y + 'px';
+      joystickStick.style.left = x + 'px';
+      joystickStick.style.top = y + 'px';
+    }
+    function moveJoystickStick(originX, originY, dx, dy) {
+      const len = Math.hypot(dx, dy);
+      const clamped = Math.min(len, SWIPE_MAX);
+      const nx = len > 0 ? dx / len : 0;
+      const ny = len > 0 ? dy / len : 0;
+      joystickStick.style.left = (originX + nx * clamped) + 'px';
+      joystickStick.style.top = (originY + ny * clamped) + 'px';
+    }
+    function hideJoystick() {
+      joystick.classList.remove('active');
+    }
+
+    // ===== HUD / toast / buttons =====
+    function renderHUD() {
+      hud.innerHTML = '';
+      for (const m of monkeys) {
+        const el = document.createElement('div');
+        el.className = 'score' + (m.isHero ? ' hero' : '') + (m.shieldActive ? ' shielded' : '');
+        el.textContent = `${m.emoji} ${m.name}: ${m.score}`;
+        hud.appendChild(el);
+      }
+    }
+    let _toastTimer = 0;
+    function showToast(text, ms = 1500) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
+    }
+    function updateButtons() {
+      const hero = monkeys[0];
+      if (!hero) { shieldBtn.disabled = true; freezeBtn.disabled = true; return; }
+      shieldBtn.disabled = !(running && hero.score >= SHIELD_COST && !hero.shieldActive);
+      freezeBtn.disabled = !(running && hero.freezeCharges > 0 && elapsed >= freezeUntil);
+      if (hero.freezeCharges > 0) {
+        freezeBadge.hidden = false;
+        freezeBadge.textContent = hero.freezeCharges;
+      } else {
+        freezeBadge.hidden = true;
+      }
+    }
+
+    // ===== World init =====
+    function dist2(ax, az, bx, bz) { const dx = ax-bx, dz = az-bz; return dx*dx + dz*dz; }
+
+    function clearScene() {
+      for (const m of monkeys) scene.remove(m.mesh);
+      for (const g of guards) scene.remove(g.mesh);
+      for (const b of bananas) scene.remove(b.mesh);
+      for (const f of freezeItems) scene.remove(f.mesh);
+      for (const t of trees) scene.remove(t.mesh);
+      for (const h of houses) scene.remove(h.group);
+      monkeys = []; guards = []; bananas = []; freezeItems = []; trees = []; houses = [];
+    }
+
+    function spawnTrees() {
+      for (let i = 0; i < 32; i++) {
+        let x = 0, z = 0, ok = false;
+        for (let tries = 0; tries < 30; tries++) {
+          x = (Math.random() - 0.5) * (WORLD_SIZE - 6);
+          z = (Math.random() - 0.5) * (WORLD_SIZE - 6);
+          ok = true;
+          for (const sp of SPAWN) {
+            if (dist2(x, z, sp.homeX, sp.homeZ) < 8*8) { ok = false; break; }
+          }
+          if (dist2(x, z, 0, 0) < 9) ok = false;
+          if (ok) break;
+        }
+        if (!ok) continue;
+        const tree = makeTree(x, z);
+        scene.add(tree);
+        trees.push({ mesh: tree, x, z, r: 0.55 });
+      }
+    }
+
+    function randomForestSpot() {
+      for (let tries = 0; tries < 50; tries++) {
+        const x = (Math.random() - 0.5) * (WORLD_SIZE - 4);
+        const z = (Math.random() - 0.5) * (WORLD_SIZE - 4);
+        let ok = true;
+        for (const sp of SPAWN) if (dist2(x, z, sp.homeX, sp.homeZ) < 7*7) { ok = false; break; }
+        if (!ok) continue;
+        for (const t of trees) if (dist2(x, z, t.x, t.z) < 1.5*1.5) { ok = false; break; }
+        if (!ok) continue;
+        for (const m of monkeys) if (dist2(x, z, m.x, m.z) < 3*3) { ok = false; break; }
+        if (ok) return { x, z };
+      }
+      return { x: (Math.random()-0.5)*(WORLD_SIZE-4), z: (Math.random()-0.5)*(WORLD_SIZE-4) };
+    }
+
+    function spawnBanana() {
+      const { x, z } = randomForestSpot();
+      const mesh = makeBanana(x, z);
+      scene.add(mesh);
+      bananas.push({ mesh, x, z });
+    }
+    function spawnFreezeItem() {
+      const { x, z } = randomForestSpot();
+      const mesh = makeFreezeItem(x, z);
+      scene.add(mesh);
+      freezeItems.push({ mesh, x, z });
+    }
+
+    function initWorld() {
+      clearScene();
+      spawnTrees();
+      for (let i = 0; i < SPAWN.length; i++) {
+        const sp = SPAWN[i];
+        const h = makeHouse(sp);
+        scene.add(h.group);
+        houses.push({ ownerIdx: i, x: sp.homeX, z: sp.homeZ, group: h.group, shield: h.shield });
+      }
+      for (let i = 0; i < SPAWN.length; i++) {
+        const sp = SPAWN[i];
+        const m = makeMonkey(sp);
+        scene.add(m.group);
+        const angle = Math.atan2(-sp.homeZ, -sp.homeX);
+        const sx = sp.homeX + Math.cos(angle) * 4.5;
+        const sz = sp.homeZ + Math.sin(angle) * 4.5;
+        m.group.position.set(sx, 0, sz);
+        monkeys.push({
+          ...sp,
+          mesh: m.group, sprite: m.sprite, ring: m.ring, hiRing: m.hiRing,
+          x: sx, z: sz, vx: 0, vz: 0,
+          heading: angle,
+          score: 0,
+          freezeCharges: 0,
+          shieldActive: false,
+          shieldEndsAt: 0,
+          stunUntil: 0,
+          targetBanana: null,
+          targetHouseIdx: -1,
+          decisionAt: 0,
+          _lastStealMap: {},
+        });
+      }
+      for (let i = 0; i < SPAWN.length; i++) {
+        const sp = SPAWN[i];
+        const gd = makeGuard(sp);
+        scene.add(gd.group);
+        const a = Math.random() * Math.PI * 2;
+        const gx = sp.homeX + Math.cos(a) * GUARD_PATROL_R;
+        const gz = sp.homeZ + Math.sin(a) * GUARD_PATROL_R;
+        gd.group.position.set(gx, 0, gz);
+        guards.push({
+          ownerIdx: i, mesh: gd.group, sprite: gd.sprite,
+          x: gx, z: gz, patrolAngle: a,
+        });
+      }
+      for (let i = 0; i < BANANA_FOREST_COUNT; i++) spawnBanana();
+      spawnFreezeItem();
+    }
+
+    // ===== Camera =====
+    function updateCamera(dt) {
+      const hero = monkeys[0];
+      if (!hero) return;
+      const mode = CAMS[camMode];
+      const hx = hero.x, hz = hero.z;
+      if (mode === 'TOP') {
+        camera.position.set(hx, 30, hz + 0.01);
+        camera.lookAt(hx, 0, hz);
+      } else if (mode === 'CHASE') {
+        const bx = -Math.cos(hero.heading) * 6.5;
+        const bz = -Math.sin(hero.heading) * 6.5;
+        const target = new THREE.Vector3(hx + bx, 5, hz + bz);
+        camera.position.lerp(target, Math.min(1, dt * 6));
+        camera.lookAt(hx + Math.cos(hero.heading) * 2, 1.2, hz + Math.sin(hero.heading) * 2);
+      } else if (mode === 'CLOSE') {
+        // Close low-angle follow — monkey visible and dead-centered
+        const fx = Math.cos(hero.heading);
+        const fz = Math.sin(hero.heading);
+        camera.position.set(hx - fx * 3.0, 2.4, hz - fz * 3.0);
+        camera.lookAt(hx, 1.0, hz);
+      } else { // ORBIT
+        const cx = hx + Math.cos(orbit.az) * Math.cos(orbit.el) * orbit.r;
+        const cy = Math.sin(orbit.el) * orbit.r;
+        const cz = hz + Math.sin(orbit.az) * Math.cos(orbit.el) * orbit.r;
+        camera.position.set(cx, cy, cz);
+        camera.lookAt(hx, 1.2, hz);
+      }
+      hero.sprite.visible = true;
+      if (hero.hiRing) hero.hiRing.visible = true;
+    }
+
+    function cycleCamera() {
+      camMode = (camMode + 1) % CAMS.length;
+      const mode = CAMS[camMode];
+      camLabel.textContent = mode;
+      if (mode === 'ORBIT' && monkeys[0]) {
+        const hero = monkeys[0];
+        const dx = camera.position.x - hero.x;
+        const dy = camera.position.y;
+        const dz = camera.position.z - hero.z;
+        orbit.r = Math.max(10, Math.hypot(dx, dy, dz));
+        orbit.az = Math.atan2(dz, dx);
+        orbit.el = Math.max(0.2, Math.min(Math.PI/2 - 0.1, Math.asin(dy / orbit.r)));
+      }
+      showToast(`Camera: ${mode}`);
+    }
+
+    // ===== Input =====
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'c' || e.key === 'C') { cycleCamera(); e.preventDefault(); return; }
+      if (e.key === 'f' || e.key === 'F') { tryFreeze(); e.preventDefault(); return; }
+      if (e.key === ' ') { tryShield(); e.preventDefault(); return; }
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'].includes(e.key)) e.preventDefault();
+      input.keys.add(e.key);
+    }, { passive: false });
+    window.addEventListener('keyup', (e) => input.keys.delete(e.key));
+
+    canvas.addEventListener('pointerdown', (e) => {
+      // Only track the first pointer for movement; ignore extras (multi-touch)
+      if (input.pointerActive && input.pointerId !== e.pointerId) return;
+      canvas.setPointerCapture(e.pointerId);
+      input.pointerActive = true;
+      input.pointerId = e.pointerId;
+      input.lastDragX = e.clientX; input.lastDragY = e.clientY;
+      if (CAMS[camMode] === 'ORBIT') return;
+      input.swipeStart = { x: e.clientX, y: e.clientY };
+      input.swipeCurrent = { x: e.clientX, y: e.clientY };
+      showJoystick(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!input.pointerActive || e.pointerId !== input.pointerId) return;
+      if (CAMS[camMode] === 'ORBIT') {
+        const dx = e.clientX - input.lastDragX;
+        const dy = e.clientY - input.lastDragY;
+        input.lastDragX = e.clientX; input.lastDragY = e.clientY;
+        orbit.az -= dx * 0.01;
+        orbit.el = Math.max(0.15, Math.min(Math.PI/2 - 0.1, orbit.el + dy * 0.01));
+      } else if (input.swipeStart) {
+        input.swipeCurrent = { x: e.clientX, y: e.clientY };
+        moveJoystickStick(
+          input.swipeStart.x, input.swipeStart.y,
+          e.clientX - input.swipeStart.x, e.clientY - input.swipeStart.y
+        );
+      }
+    });
+    function clearPointer(e) {
+      if (e && e.pointerId !== input.pointerId && input.pointerActive) return;
+      input.pointerActive = false;
+      input.pointerId = null;
+      input.swipeStart = null;
+      input.swipeCurrent = null;
+      hideJoystick();
+    }
+    canvas.addEventListener('pointerup', clearPointer);
+    canvas.addEventListener('pointercancel', clearPointer);
+    canvas.addEventListener('wheel', (e) => {
+      if (CAMS[camMode] === 'ORBIT') {
+        orbit.r = Math.max(8, Math.min(70, orbit.r + e.deltaY * 0.02));
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    camBtn.addEventListener('click', cycleCamera);
+    shieldBtn.addEventListener('click', tryShield);
+    freezeBtn.addEventListener('click', tryFreeze);
+
+    // ===== Powers =====
+    function tryShield() {
+      const hero = monkeys[0];
+      if (!hero || !running) return;
+      if (hero.shieldActive) { showToast('🛡 Shield already up'); return; }
+      if (hero.score < SHIELD_COST) { showToast(`Need ${SHIELD_COST} 🍌 to build shield`); return; }
+      hero.score -= SHIELD_COST;
+      hero.shieldActive = true;
+      hero.shieldEndsAt = elapsed + SHIELD_DURATION;
+      houses[0].shield.visible = true;
+      showToast(`🛡 Shield up for ${SHIELD_DURATION}s!`);
+      renderHUD();
+      updateButtons();
+    }
+    function tryFreeze() {
+      const hero = monkeys[0];
+      if (!hero || !running) return;
+      if (hero.freezeCharges <= 0) { showToast('No ❄ charges'); return; }
+      if (elapsed < freezeUntil) return;
+      hero.freezeCharges -= 1;
+      freezeUntil = elapsed + FREEZE_DURATION;
+      showToast(`❄ Everyone frozen ${FREEZE_DURATION}s!`);
+      updateButtons();
+    }
+
+    // ===== AI =====
+    function pickAITarget(ai, idx) {
+      let bestB = null, bestBd = Infinity;
+      for (const b of bananas) {
+        const d = dist2(ai.x, ai.z, b.x, b.z);
+        if (d < bestBd) { bestBd = d; bestB = b; }
+      }
+      let bestH = null, bestHd = Infinity;
+      for (const h of houses) {
+        if (h.ownerIdx === idx) continue;
+        const owner = monkeys[h.ownerIdx];
+        if (owner.score <= 0 || owner.shieldActive) continue;
+        const d = dist2(ai.x, ai.z, h.x, h.z);
+        if (d < bestHd) { bestHd = d; bestH = h; }
+      }
+      if (bestH && (!bestB || bestHd < bestBd * 0.8)) {
+        ai.targetBanana = null;
+        ai.targetHouseIdx = bestH.ownerIdx;
+      } else if (bestB) {
+        ai.targetBanana = bestB;
+        ai.targetHouseIdx = -1;
+      } else if (bestH) {
+        ai.targetBanana = null;
+        ai.targetHouseIdx = bestH.ownerIdx;
+      } else {
+        ai.targetBanana = null;
+        ai.targetHouseIdx = -1;
+      }
+    }
+
+    // ===== Movement / collisions =====
+    function moveMonkey(m, dt) {
+      let nx = m.x + m.vx * dt;
+      let nz = m.z + m.vz * dt;
+      const limit = HALF - 1;
+      nx = Math.max(-limit, Math.min(limit, nx));
+      nz = Math.max(-limit, Math.min(limit, nz));
+      for (const t of trees) {
+        const dd = dist2(nx, nz, t.x, t.z);
+        const minD = MONKEY_RADIUS + t.r;
+        if (dd < minD * minD) {
+          const d = Math.sqrt(dd) || 0.001;
+          nx = t.x + (nx - t.x) / d * minD;
+          nz = t.z + (nz - t.z) / d * minD;
+        }
+      }
+      for (const h of houses) {
+        const lx = nx - h.x, lz = nz - h.z;
+        if (Math.abs(lx) < HOUSE_WALL_HALF && Math.abs(lz) < HOUSE_WALL_HALF) {
+          if (Math.abs(lx) > Math.abs(lz)) nx = h.x + Math.sign(lx || 1) * HOUSE_WALL_HALF;
+          else nz = h.z + Math.sign(lz || 1) * HOUSE_WALL_HALF;
+        }
+      }
+      m.x = nx; m.z = nz;
+      m.mesh.position.set(nx, 0, nz);
+    }
+
+    function updateHero(dt) {
+      const hero = monkeys[0];
+      if (elapsed < hero.stunUntil) { hero.vx = 0; hero.vz = 0; return; }
+
+      // Screen-space input: sx (right=+, left=-), sy (down=+, up=-)
+      let sx = 0, sy = 0;
+      const k = input.keys;
+      if (k.has('ArrowLeft')  || k.has('a') || k.has('A')) sx -= 1;
+      if (k.has('ArrowRight') || k.has('d') || k.has('D')) sx += 1;
+      if (k.has('ArrowUp')    || k.has('w') || k.has('W')) sy -= 1;
+      if (k.has('ArrowDown')  || k.has('s') || k.has('S')) sy += 1;
+
+      // Swipe overrides only when no key input
+      if (sx === 0 && sy === 0 && input.swipeStart && input.swipeCurrent) {
+        const dxp = input.swipeCurrent.x - input.swipeStart.x;
+        const dyp = input.swipeCurrent.y - input.swipeStart.y;
+        const len = Math.hypot(dxp, dyp);
+        if (len >= SWIPE_DEADZONE) {
+          // Map magnitude to 0..1 so short swipes move slower than full pushes
+          const scale = Math.min(1, (len - SWIPE_DEADZONE) / (SWIPE_MAX - SWIPE_DEADZONE));
+          sx = (dxp / len) * scale;
+          sy = (dyp / len) * scale;
+        }
+      } else if (sx !== 0 || sy !== 0) {
+        // Normalize keyboard input
+        const m = Math.hypot(sx, sy);
+        sx /= m; sy /= m;
+      }
+
+      // Map screen-space input to world-space via current camera orientation
+      let dx = 0, dz = 0;
+      if (sx !== 0 || sy !== 0) {
+        const { rx, rz, fx, fz } = getMoveAxes();
+        // sy < 0 (up) means move along +forward axis
+        dx = sx * rx + (-sy) * fx;
+        dz = sx * rz + (-sy) * fz;
+      }
+      const speedScale = Math.min(1, Math.hypot(dx, dz));
+      const m2 = Math.hypot(dx, dz);
+      if (m2 > 1e-5) { dx /= m2; dz /= m2; }
+
+      hero.vx = dx * HERO_SPEED * speedScale;
+      hero.vz = dz * HERO_SPEED * speedScale;
+      moveMonkey(hero, dt);
+      if (dx !== 0 || dz !== 0) hero.heading = Math.atan2(dz, dx);
+    }
+
+    function updateAI(ai, idx, dt) {
+      if (elapsed < ai.stunUntil) { ai.vx = 0; ai.vz = 0; return; }
+      if (elapsed < freezeUntil) { ai.vx = 0; ai.vz = 0; return; }
+      const targetValid = ai.targetBanana
+        ? bananas.includes(ai.targetBanana)
+        : (ai.targetHouseIdx >= 0
+            && !monkeys[ai.targetHouseIdx].shieldActive
+            && monkeys[ai.targetHouseIdx].score > 0);
+      if (!targetValid || elapsed >= ai.decisionAt) {
+        pickAITarget(ai, idx);
+        ai.decisionAt = elapsed + 1.4 + Math.random();
+      }
+      let tx, tz;
+      if (ai.targetBanana) { tx = ai.targetBanana.x; tz = ai.targetBanana.z; }
+      else if (ai.targetHouseIdx >= 0) { tx = houses[ai.targetHouseIdx].x; tz = houses[ai.targetHouseIdx].z; }
+      else { tx = 0; tz = 0; }
+      let dx = tx - ai.x, dz = tz - ai.z;
+      const m = Math.hypot(dx, dz);
+      if (m > 0.001) { dx /= m; dz /= m; }
+      // small wobble so they don't all pile up perfectly
+      const wob = Math.sin(elapsed * 2 + idx) * 0.2;
+      dx += -dz * wob; dz += dx * wob;
+      const mm = Math.hypot(dx, dz) || 1;
+      dx /= mm; dz /= mm;
+      ai.vx = dx * AI_SPEED;
+      ai.vz = dz * AI_SPEED;
+      moveMonkey(ai, dt);
+      if (Math.abs(ai.vx) + Math.abs(ai.vz) > 0.1) ai.heading = Math.atan2(ai.vz, ai.vx);
+    }
+
+    function updateGuards(dt) {
+      for (let i = 0; i < guards.length; i++) {
+        const g = guards[i];
+        const house = houses[i];
+        const owner = monkeys[i];
+        let intruder = null;
+        if (elapsed >= freezeUntil) {
+          for (let j = 0; j < monkeys.length; j++) {
+            if (j === i) continue;
+            const mj = monkeys[j];
+            if (elapsed < mj.stunUntil) continue;
+            const d = dist2(g.x, g.z, mj.x, mj.z);
+            if (d < GUARD_DETECT_R * GUARD_DETECT_R) { intruder = mj; break; }
+          }
+        }
+        let dx = 0, dz = 0, sp = 0;
+        if (intruder) {
+          dx = intruder.x - g.x; dz = intruder.z - g.z;
+          const dd = Math.hypot(dx, dz) || 0.001;
+          dx /= dd; dz /= dd;
+          sp = GUARD_SPEED * 1.25;
+          if (dd < GUARD_CATCH_R + MONKEY_RADIUS) {
+            intruder.stunUntil = elapsed + STUN_DURATION;
+            if (intruder.score > 0) {
+              intruder.score -= 1;
+              owner.score += 1;
+              renderHUD();
+              if (intruder.isHero) showToast(`Caught! ${owner.name}'s guard took 1 🍌`);
+              else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`);
+            }
+            const bx = intruder.x - g.x, bz = intruder.z - g.z;
+            const bd = Math.hypot(bx, bz) || 0.001;
+            intruder.x += (bx / bd) * 3;
+            intruder.z += (bz / bd) * 3;
+            intruder.mesh.position.set(intruder.x, 0, intruder.z);
+          }
+        } else if (elapsed < freezeUntil) {
+          dx = 0; dz = 0; sp = 0;
+        } else {
+          g.patrolAngle += dt * 0.85;
+          const tx = house.x + Math.cos(g.patrolAngle) * GUARD_PATROL_R;
+          const tz = house.z + Math.sin(g.patrolAngle) * GUARD_PATROL_R;
+          dx = tx - g.x; dz = tz - g.z;
+          const dd = Math.hypot(dx, dz) || 0.001;
+          dx /= dd; dz /= dd;
+          sp = GUARD_SPEED;
+        }
+        g.x += dx * sp * dt;
+        g.z += dz * sp * dt;
+        // leash
+        const dFromHouse = Math.hypot(g.x - house.x, g.z - house.z);
+        const maxLeash = GUARD_DETECT_R + 1;
+        if (dFromHouse > maxLeash) {
+          const f = maxLeash / dFromHouse;
+          g.x = house.x + (g.x - house.x) * f;
+          g.z = house.z + (g.z - house.z) * f;
+        }
+        g.mesh.position.set(g.x, 0, g.z);
+        g.sprite.material.color.setHex(elapsed < freezeUntil ? 0x88ccff : 0xffe0e0);
+      }
+    }
+
+    function collectAndSteal() {
+      // Forest bananas
+      for (let i = bananas.length - 1; i >= 0; i--) {
+        const b = bananas[i];
+        for (const m of monkeys) {
+          if (elapsed < m.stunUntil) continue;
+          if (elapsed < freezeUntil && !m.isHero) continue;
+          if (dist2(m.x, m.z, b.x, b.z) < (MONKEY_RADIUS + BANANA_RADIUS) ** 2) {
+            m.score += 1;
+            scene.remove(b.mesh);
+            bananas.splice(i, 1);
+            spawnBanana();
+            renderHUD();
+            if (m.isHero) updateButtons();
+            break;
+          }
+        }
+      }
+      // Freeze pickups (hero only)
+      const hero = monkeys[0];
+      if (hero && elapsed >= hero.stunUntil) {
+        for (let i = freezeItems.length - 1; i >= 0; i--) {
+          const f = freezeItems[i];
+          if (dist2(hero.x, hero.z, f.x, f.z) < (MONKEY_RADIUS + FREEZE_PICKUP_R) ** 2) {
+            hero.freezeCharges = Math.min(3, hero.freezeCharges + 1);
+            scene.remove(f.mesh);
+            freezeItems.splice(i, 1);
+            showToast('❄ +1 freeze!');
+            updateButtons();
+            break;
+          }
+        }
+      }
+      // Stealing
+      for (const m of monkeys) {
+        if (elapsed < m.stunUntil) continue;
+        if (elapsed < freezeUntil && !m.isHero) continue;
+        for (const h of houses) {
+          const owner = monkeys[h.ownerIdx];
+          if (owner === m) continue;
+          if (owner.shieldActive) continue;
+          if (owner.score <= 0) continue;
+          if (dist2(m.x, m.z, h.x, h.z) >= STEAL_RADIUS * STEAL_RADIUS) continue;
+          const key = h.ownerIdx;
+          if (elapsed - (m._lastStealMap[key] || -10) < 0.6) continue;
+          m._lastStealMap[key] = elapsed;
+          owner.score -= 1;
+          m.score += 1;
+          renderHUD();
+          if (m.isHero) { showToast(`Stole 1 🍌 from ${owner.name}!`); updateButtons(); }
+          else if (owner.isHero) showToast(`${m.name} stole from you!`);
+        }
+      }
+    }
+
+    function maybeSpawnFreeze() {
+      if (freezeItems.length < 2 && Math.random() < 0.006) spawnFreezeItem();
+    }
+
+    function updateShields() {
+      for (let i = 0; i < monkeys.length; i++) {
+        const m = monkeys[i];
+        if (m.shieldActive && elapsed >= m.shieldEndsAt) {
+          m.shieldActive = false;
+          houses[i].shield.visible = false;
+          renderHUD();
+          if (m.isHero) { showToast('🛡 Shield down'); updateButtons(); }
+        }
+      }
+    }
+
+    function animateItems(dt) {
+      for (const b of bananas) {
+        b.mesh.userData.bobPhase += dt * 2.5;
+        b.mesh.userData.sprite.position.y = 0.55 + Math.sin(b.mesh.userData.bobPhase) * 0.1;
+      }
+      for (const f of freezeItems) {
+        f.mesh.userData.bobPhase += dt * 2.0;
+        f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
+        f.mesh.userData.ring.rotation.z += dt * 1.2;
+      }
+      for (let i = 0; i < houses.length; i++) {
+        const sh = houses[i].shield;
+        if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
+      }
+    }
+
+    // ===== Loop =====
+    function resize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+
+    function frame(t) {
+      requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (t - lastT) / 1000 || 0);
+      lastT = t;
+
+      if (running) {
+        elapsed += dt;
+        timeLeft -= dt;
+        if (timeLeft <= 0) { timeLeft = 0; endRound(); }
+        else timerEl.textContent = Math.ceil(timeLeft);
+
+        updateHero(dt);
+        for (let i = 1; i < monkeys.length; i++) updateAI(monkeys[i], i, dt);
+        updateGuards(dt);
+        collectAndSteal();
+        updateShields();
+        maybeSpawnFreeze();
+        updateButtons();
+      }
+      animateItems(dt);
+      updateCamera(dt);
+      renderer.render(scene, camera);
+    }
+
+    function startRound() {
+      initWorld();
+      timeLeft = ROUND_SECONDS;
+      elapsed = 0;
+      freezeUntil = 0;
+      input.swipeStart = null;
+      input.swipeCurrent = null;
+      hideJoystick();
+      camMode = 0; camLabel.textContent = CAMS[camMode];
+      overlay.classList.add('hidden');
+      timerEl.textContent = ROUND_SECONDS;
+      // snap camera to top-down over hero on start
+      const h0 = monkeys[0];
+      camera.position.set(h0.x, 30, h0.z + 0.01);
+      camera.lookAt(h0.x, 0, h0.z);
+      renderHUD();
+      updateButtons();
+      running = true;
+    }
+
+    function endRound() {
+      running = false;
+      const ranked = monkeys.slice().sort((a, b) => b.score - a.score);
+      const winner = ranked[0];
+      overlay.innerHTML = '';
+      const h = document.createElement('h1');
+      h.textContent = winner.isHero
+        ? `🏆 You won! ${winner.score} 🍌`
+        : `${winner.emoji} ${winner.name} won with ${winner.score} 🍌`;
+      const sub = document.createElement('p');
+      sub.textContent = winner.isHero ? 'King of the forest!' : 'Try again — out-steal them next time!';
+      const board = document.createElement('div');
+      board.className = 'leaderboard';
+      ranked.forEach((m, i) => {
+        const row = document.createElement('div');
+        row.className = 'row' + (i === 0 ? ' winner' : '');
+        row.innerHTML = `<span>${i + 1}. ${m.emoji} ${m.name}</span><span>${m.score} 🍌</span>`;
+        board.appendChild(row);
+      });
+      const btn = document.createElement('button');
+      btn.className = 'start';
+      btn.textContent = 'Play again';
+      btn.addEventListener('click', startRound);
+      overlay.appendChild(h);
+      overlay.appendChild(sub);
+      overlay.appendChild(board);
+      overlay.appendChild(btn);
+      overlay.classList.remove('hidden');
+      updateButtons();
+    }
+
+    startBtn.addEventListener('click', startRound);
+
+    // ===== Boot =====
+    resize();
+    initWorld();
+    lastT = performance.now();
+    requestAnimationFrame(frame);
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
