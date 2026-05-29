@@ -448,6 +448,10 @@
     let freezeUntil = 0;
     let lastT = 0;
     let camMode = 0;
+    // Independent yaw for follow-style cameras (CHASE/CLOSE). Decoupled from
+    // hero.heading to avoid an input→heading→camera→input feedback loop that
+    // would otherwise make the monkey spin in circles when holding left/right.
+    let cameraYaw = 0;
     const orbit = { az: Math.PI/4, el: Math.PI/3.5, r: 28 };
 
     const input = {
@@ -646,20 +650,31 @@
       const hero = monkeys[0];
       if (!hero) return;
       const mode = CAMS[camMode];
+      // Re-align cameraYaw with hero.heading ONLY when the monkey is essentially
+      // stopped. While moving, yaw stays fixed so input direction can't feed back
+      // into camera rotation (which previously caused the monkey to spin).
+      if (mode === 'CHASE' || mode === 'CLOSE') {
+        const vMag = Math.hypot(hero.vx, hero.vz);
+        if (vMag < 0.5) {
+          let dh = hero.heading - cameraYaw;
+          while (dh >  Math.PI) dh -= Math.PI * 2;
+          while (dh < -Math.PI) dh += Math.PI * 2;
+          cameraYaw += dh * Math.min(1, dt * 4);
+        }
+      }
       const hx = hero.x, hz = hero.z;
       if (mode === 'TOP') {
         camera.position.set(hx, 30, hz + 0.01);
         camera.lookAt(hx, 0, hz);
       } else if (mode === 'CHASE') {
-        const bx = -Math.cos(hero.heading) * 6.5;
-        const bz = -Math.sin(hero.heading) * 6.5;
+        const bx = -Math.cos(cameraYaw) * 6.5;
+        const bz = -Math.sin(cameraYaw) * 6.5;
         const target = new THREE.Vector3(hx + bx, 5, hz + bz);
         camera.position.lerp(target, Math.min(1, dt * 6));
-        camera.lookAt(hx + Math.cos(hero.heading) * 2, 1.2, hz + Math.sin(hero.heading) * 2);
+        camera.lookAt(hx + Math.cos(cameraYaw) * 2, 1.2, hz + Math.sin(cameraYaw) * 2);
       } else if (mode === 'CLOSE') {
-        // Close low-angle follow — monkey visible and dead-centered
-        const fx = Math.cos(hero.heading);
-        const fz = Math.sin(hero.heading);
+        const fx = Math.cos(cameraYaw);
+        const fz = Math.sin(cameraYaw);
         camera.position.set(hx - fx * 3.0, 2.4, hz - fz * 3.0);
         camera.lookAt(hx, 1.0, hz);
       } else { // ORBIT
@@ -677,6 +692,9 @@
       camMode = (camMode + 1) % CAMS.length;
       const mode = CAMS[camMode];
       camLabel.textContent = mode;
+      if ((mode === 'CHASE' || mode === 'CLOSE') && monkeys[0]) {
+        cameraYaw = monkeys[0].heading;
+      }
       if (mode === 'ORBIT' && monkeys[0]) {
         const hero = monkeys[0];
         const dx = camera.position.x - hero.x;
@@ -1103,6 +1121,7 @@
       timerEl.textContent = ROUND_SECONDS;
       // snap camera to top-down over hero on start
       const h0 = monkeys[0];
+      cameraYaw = h0.heading;
       camera.position.set(h0.x, 30, h0.z + 0.01);
       camera.lookAt(h0.x, 0, h0.z);
       renderHUD();
