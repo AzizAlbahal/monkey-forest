@@ -159,14 +159,17 @@
     const AI_SPEED = 5.8;
     const GUARD_SPEED = 4.2;
     const GUARD_PATROL_R = 3.2;
-    const GUARD_DETECT_R = 5.5;
+    const GUARD_DETECT_R = 4.5;
     const GUARD_CATCH_R = 1.1;
     const SHIELD_DURATION = 5.0;
     const SHIELD_COST = 5;
     const FREEZE_DURATION = 3.0;
     const STUN_DURATION = 1.2;
     const HOUSE_WALL_HALF = 2.2;
-    const STEAL_RADIUS = 2.8;
+    // Must be > GUARD_PATROL_R so the hero can stand at the *outside* edge of
+    // the patrol circle and still be in range. Otherwise the steal zone is
+    // enclosed by the patrol path and the hero cannot enter without being caught.
+    const STEAL_RADIUS = 4.0;
     const MONKEY_RADIUS = 0.65;
     const BANANA_RADIUS = 0.5;
     const FREEZE_PICKUP_R = 0.9;
@@ -337,13 +340,21 @@
         new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
       );
       shield.visible = false;
+      // Steal-zone ring on the ground — shown only when this house has bananas
+      const stealRing = new THREE.Mesh(
+        new THREE.RingGeometry(STEAL_RADIUS - 0.18, STEAL_RADIUS, 56),
+        new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false })
+      );
+      stealRing.rotation.x = -Math.PI/2;
+      stealRing.position.y = 0.06;
+      stealRing.visible = false;
       // Name plate
       const plate = makeSprite(nameTexture(spawn.name, spawn.color), 2.4);
       plate.scale.y = 0.6;
       plate.position.y = 5.1;
-      g.add(walls); g.add(roof); g.add(door); g.add(stashGroup); g.add(shield); g.add(plate);
+      g.add(walls); g.add(roof); g.add(door); g.add(stashGroup); g.add(stealRing); g.add(shield); g.add(plate);
       g.position.set(spawn.homeX, 0, spawn.homeZ);
-      return { group: g, shield, stashGroup };
+      return { group: g, shield, stashGroup, stealRing };
     }
 
     function makeMonkey(spawn) {
@@ -602,7 +613,7 @@
         const sp = SPAWN[i];
         const h = makeHouse(sp);
         scene.add(h.group);
-        houses.push({ ownerIdx: i, x: sp.homeX, z: sp.homeZ, group: h.group, shield: h.shield });
+        houses.push({ ownerIdx: i, x: sp.homeX, z: sp.homeZ, group: h.group, shield: h.shield, stashGroup: h.stashGroup, stealRing: h.stealRing });
       }
       for (let i = 0; i < SPAWN.length; i++) {
         const sp = SPAWN[i];
@@ -1072,6 +1083,15 @@
       for (let i = 0; i < houses.length; i++) {
         const sh = houses[i].shield;
         if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
+        // Steal hint: ring + stash visible only when this house has bananas to steal
+        const owner = monkeys[i];
+        const stealable = owner && owner.score > 0 && !owner.shieldActive;
+        const ring = houses[i].stealRing;
+        if (ring) {
+          ring.visible = stealable;
+          if (stealable) ring.material.opacity = 0.45 + Math.sin(elapsed * 3 + i) * 0.18;
+        }
+        if (houses[i].stashGroup) houses[i].stashGroup.visible = stealable;
       }
     }
 
