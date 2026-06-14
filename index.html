@@ -531,6 +531,89 @@
       };
     }
 
+    // Shared 4-step cel-shading gradient for all monkey materials
+    const monkeyToonGradient = (() => {
+      const data = new Uint8Array([76, 140, 200, 255]); // 0.30, 0.55, 0.78, 1.00
+      const tex = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
+      tex.minFilter = THREE.NearestFilter;
+      tex.magFilter = THREE.NearestFilter;
+      tex.needsUpdate = true;
+      return tex;
+    })();
+
+    // Per-character accessory mounted on the head — identity at a glance
+    function makeAccessory(spawn) {
+      const g = new THREE.Group();
+      const accent = spawn.color;
+      const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: monkeyToonGradient });
+      if (spawn.isHero) {
+        // Gold crown — band + 5 spikes + jewels
+        const goldMat = toon(0xffd166);
+        const jewelMat = toon(0xff3366);
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.045, 8, 20), goldMat);
+        band.position.y = 0.28; band.rotation.x = Math.PI / 2;
+        g.add(band);
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 4 - 0.5) * Math.PI * 0.75;
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.13, 6), goldMat);
+          spike.position.set(Math.sin(a) * 0.26, 0.37, Math.cos(a) * 0.26);
+          g.add(spike);
+        }
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 2 - 0.5) * 0.6;
+          const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), jewelMat);
+          jewel.position.set(Math.sin(a) * 0.26, 0.28, Math.cos(a) * 0.26);
+          g.add(jewel);
+        }
+      } else if (spawn.id === 'ai1') {
+        // Bandana — tilted torus with knot + ribbon ends in the back
+        const m = toon(accent);
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 10, 24), m);
+        band.position.y = 0.13; band.rotation.x = Math.PI / 2 - 0.18;
+        g.add(band);
+        const knot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), m);
+        knot.position.set(0, 0.14, -0.27);
+        g.add(knot);
+        const ribbon1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.18), m);
+        ribbon1.position.set(-0.06, 0.10, -0.34); ribbon1.rotation.set(0.2, 0.2, -0.15);
+        g.add(ribbon1);
+        const ribbon2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.16), m);
+        ribbon2.position.set(0.06, 0.10, -0.33); ribbon2.rotation.set(0.2, -0.2, 0.15);
+        g.add(ribbon2);
+      } else if (spawn.id === 'ai2') {
+        // Side flower — pink petals + gold center, tilted forward
+        const petalMat = toon(0xff7eb0);
+        const centerMat = toon(0xffd166);
+        const flower = new THREE.Group();
+        flower.position.set(-0.28, 0.18, 0.06);
+        flower.rotation.set(0, -0.3, 0.2);
+        const center = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), centerMat);
+        flower.add(center);
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          const petal = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), petalMat);
+          petal.position.set(Math.cos(a) * 0.07, Math.sin(a) * 0.07, 0);
+          petal.scale.set(1, 1, 0.45);
+          flower.add(petal);
+        }
+        g.add(flower);
+      } else if (spawn.id === 'ai3') {
+        // Wizard hat — purple cone + gold trim + star at tip
+        const hatMat = toon(accent);
+        const trimMat = toon(0xffd166);
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.42, 14), hatMat);
+        cone.position.y = 0.46; cone.rotation.set(-0.1, 0, 0.08);
+        g.add(cone);
+        const brim = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.035, 8, 18), trimMat);
+        brim.position.y = 0.27; brim.rotation.x = Math.PI / 2;
+        g.add(brim);
+        const star = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), trimMat);
+        star.position.set(-0.04, 0.66, 0.04);
+        g.add(star);
+      }
+      return g;
+    }
+
     // Fully built 3D monkey: pear torso + neck/shoulders + sphere head with muzzle/ears,
     // jointed arms (elbow) and legs (knee) with proper feet, multi-segment curly tail,
     // accent-colored collar, and a back-side dark shell for a cartoon outline.
@@ -543,11 +626,12 @@
       const OUTLINE = 0x1a0c08;
       const accent = spawn.color;
 
-      const furMat = new THREE.MeshLambertMaterial({ color: FUR });
-      const bellyMat = new THREE.MeshLambertMaterial({ color: BELLY });
-      const muzzleMat = new THREE.MeshLambertMaterial({ color: MUZZLE });
-      const innerEarMat = new THREE.MeshLambertMaterial({ color: INNER_EAR });
-      const collarMat = new THREE.MeshLambertMaterial({ color: accent });
+      const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: monkeyToonGradient });
+      const furMat = toon(FUR);
+      const bellyMat = toon(BELLY);
+      const muzzleMat = toon(MUZZLE);
+      const innerEarMat = toon(INNER_EAR);
+      const collarMat = toon(accent);
       const outlineMat = new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide });
 
       function addOutline(parent, scale = 1.06) {
@@ -690,6 +774,9 @@
       const headSprite = makeSprite(mouthTexture('smile'), 0.34);
       headSprite.position.set(0, -0.14, 0.43);
       headGroup.add(headSprite);
+
+      // Per-character accessory — crown, bandana, flower, or wizard hat
+      headGroup.add(makeAccessory(spawn));
 
       // === ARMS — segmented at the elbow, pre-curled at rest ===
       function makeArm(side) {
