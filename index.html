@@ -24,18 +24,49 @@
       padding: 8px; pointer-events: none; z-index: 2;
     }
     .score {
+      position: relative;
       background: rgba(0, 0, 0, 0.55); color: #fff; font-weight: 700;
       padding: 5px 10px; border-radius: 999px; font-size: 14px;
       display: inline-flex; align-items: center; gap: 4px; backdrop-filter: blur(6px);
+      transform-origin: center;
     }
     .score.hero { background: #ff9f1c; color: #1a1a1a; }
     .score.shielded { box-shadow: 0 0 0 2px #66ccff, 0 0 10px #66ccff; }
+    .score.pop { animation: chipPop 280ms ease-out; }
+    @keyframes chipPop {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.25); }
+      100% { transform: scale(1); }
+    }
+    .delta {
+      position: absolute; left: 50%; bottom: 100%;
+      transform: translateX(-50%);
+      font-size: 14px; font-weight: 800; letter-spacing: 0.5px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+      pointer-events: none; white-space: nowrap;
+      animation: deltaRise 800ms ease-out forwards;
+    }
+    .delta.pos { color: #7dffac; }
+    .delta.neg { color: #ff8b8b; }
+    @keyframes deltaRise {
+      from { transform: translate(-50%, 4px); opacity: 0; }
+      20%  { opacity: 1; }
+      to   { transform: translate(-50%, -28px); opacity: 0; }
+    }
     #timer {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px);
       left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.55); color: #fff; padding: 4px 12px;
-      border-radius: 999px; font-size: 14px; font-weight: 700;
+      background: rgba(0,0,0,0.55); color: #fff; padding: 6px 16px;
+      border-radius: 999px; font-size: 20px; font-weight: 800;
       z-index: 2; pointer-events: none; backdrop-filter: blur(6px);
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    #timer.warn { background: #ff9f1c; color: #1a1a1a; animation: timerPulse 1s ease-in-out infinite; }
+    #timer.danger { background: #ff3a3a; color: #fff; animation: timerPulse 0.5s ease-in-out infinite; }
+    #timer.golden { box-shadow: 0 0 0 3px #ffd166, 0 0 20px #ffd166; }
+    @keyframes timerPulse {
+      0%, 100% { transform: translateX(-50%) scale(1); }
+      50%      { transform: translateX(-50%) scale(1.12); }
     }
     #controls {
       position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
@@ -46,27 +77,42 @@
     .btn-wrap { position: relative; }
     .btn {
       pointer-events: auto;
-      background: rgba(0,0,0,0.55); color: #fff; border: 2px solid rgba(255,255,255,0.25);
-      width: 56px; height: 56px; border-radius: 50%; font-size: 26px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(0,0,0,0.55));
+      color: #fff; border: 2px solid rgba(255,255,255,0.35);
+      width: 64px; height: 64px; border-radius: 50%; font-size: 28px;
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; backdrop-filter: blur(6px);
-      transition: transform 0.06s ease, opacity 0.15s ease;
+      transition: transform 0.08s ease, opacity 0.15s ease, box-shadow 0.15s ease;
       padding: 0;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.3);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
     }
-    .btn:active { transform: scale(0.94); }
-    .btn[disabled] { opacity: 0.35; filter: grayscale(0.5); cursor: not-allowed; }
+    .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 3px 8px rgba(0,0,0,0.3); }
+    .btn[disabled] { opacity: 0.4; filter: grayscale(0.5); cursor: not-allowed; box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
+    .btn.ready { animation: readyPulse 1.1s ease-in-out infinite; }
+    @keyframes readyPulse {
+      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.3), 0 0 0 0 rgba(255,209,102,0.7); }
+      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.45), 0 6px 14px rgba(0,0,0,0.3), 0 0 0 8px rgba(255,209,102,0); }
+    }
     .badge {
       position: absolute; top: -4px; right: -4px;
       background: #ff5b3a; color: #fff; font-size: 11px; font-weight: 800;
       border-radius: 999px; padding: 1px 6px; line-height: 1.4;
       box-shadow: 0 0 0 2px rgba(0,0,0,0.6);
     }
-    .btn-group { display: flex; gap: 8px; align-items: flex-end; }
+    .btn-group { display: flex; gap: 10px; align-items: flex-end; }
     #cam-label {
-      position: absolute; bottom: 60px; left: 0;
-      font-size: 11px; color: rgba(255,255,255,0.85); font-weight: 700;
-      background: rgba(0,0,0,0.45); padding: 2px 6px; border-radius: 6px;
+      position: absolute; bottom: 70px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 800;
+      background: rgba(0,0,0,0.55); padding: 3px 8px; border-radius: 8px;
       pointer-events: none; white-space: nowrap;
+      letter-spacing: 0.5px;
+    }
+    #cam-label.flash { animation: camLabelIn 320ms ease-out; }
+    @keyframes camLabelIn {
+      from { transform: translate(-50%, 8px); opacity: 0; }
+      to   { transform: translate(-50%, 0); opacity: 1; }
     }
     #overlay {
       position: fixed; inset: 0; display: flex; flex-direction: column;
@@ -91,13 +137,55 @@
     .leaderboard .row { display: flex; justify-content: space-between; gap: 18px; font-size: 17px; }
     .leaderboard .row.winner { color: #ffd166; font-weight: 800; }
     #toast {
-      position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: 110px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.78); color: #fff; padding: 8px 16px;
       border-radius: 12px; font-weight: 700; font-size: 14px;
       pointer-events: none; opacity: 0; transition: opacity 0.25s ease; z-index: 5;
       max-width: 80vw; text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
     }
     #toast.show { opacity: 1; }
+    #toast.good { background: #2fa05f; color: #fff; }
+    #toast.bad  { background: #c83a3a; color: #fff; }
+    #stun-flash {
+      position: fixed; inset: 0; pointer-events: none; z-index: 4;
+      opacity: 0; transition: opacity 120ms ease-out;
+      background: radial-gradient(ellipse at center, transparent 35%, rgba(255,0,0,0.55) 100%);
+    }
+    .mascot {
+      font-size: 80px; line-height: 1;
+      animation: mascotBob 2.4s ease-in-out infinite;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
+    }
+    @keyframes mascotBob {
+      0%, 100% { transform: translateY(0) rotate(-4deg); }
+      50%      { transform: translateY(-10px) rotate(4deg); }
+    }
+    .diff-row {
+      display: flex; gap: 8px; margin: 4px 0 0;
+    }
+    .diff-row button {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.12); color: #fff;
+      border: 2px solid rgba(255,255,255,0.25);
+      padding: 8px 14px; border-radius: 999px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .diff-row button.sel {
+      background: #ff9f1c; color: #1a1a1a; border-color: #ff9f1c;
+    }
+    .stats-row {
+      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+      font-size: 13px; opacity: 0.85;
+    }
+    .stats-row b { color: #ffd166; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
     #joystick {
       position: fixed; pointer-events: none; z-index: 3;
       opacity: 0; transition: opacity 0.12s ease;
@@ -126,24 +214,32 @@
   <div id="timer">60</div>
   <div id="controls">
     <div class="btn-wrap">
-      <button class="btn" id="camBtn" title="Cycle camera (C)">👁</button>
-      <div id="cam-label">TOP</div>
+      <button class="btn" id="camBtn" aria-label="Cycle camera view" title="Cycle camera (C)">👁</button>
+      <div id="cam-label" aria-live="polite">TOP</div>
     </div>
     <div class="btn-group">
       <div class="btn-wrap">
-        <button class="btn" id="freezeBtn" title="Freeze others (F)" disabled>❄️<span class="badge" id="freezeBadge" hidden>0</span></button>
+        <button class="btn" id="freezeBtn" aria-label="Use freeze power" title="Freeze others (F)" disabled>❄️<span class="badge" id="freezeBadge" aria-live="polite" hidden>0</span></button>
       </div>
       <div class="btn-wrap">
-        <button class="btn" id="shieldBtn" title="Build house shield, 5🍌 (Space)" disabled>🛡️</button>
+        <button class="btn" id="shieldBtn" aria-label="Activate home shield" title="Build house shield (Space)" disabled>🛡️</button>
       </div>
     </div>
   </div>
-  <div id="toast"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="stun-flash"></div>
   <div id="joystick"><div class="base"></div><div class="stick"></div></div>
   <div id="overlay">
-    <h1>🐵 Monkey Forest</h1>
-    <p>Grab 🍌 from the forest <b>or</b> sneak into other monkeys' houses to steal — but watch out for their guards! Spend 5🍌 to 🛡 shield your home (5s). Grab ❄ to freeze everyone for 3s.</p>
-    <p style="opacity:0.7">Swipe to move (camera-relative) • WASD/Arrows • 👁 C cycles TOP / CHASE / CLOSE / ORBIT • ❄ F • 🛡 Space</p>
+    <div class="mascot">🐵</div>
+    <h1>Monkey Forest</h1>
+    <p>Grab 🍌 from the forest <b>or</b> sneak into other monkeys' houses to steal — but watch out for their guards! Spend 🍌 to 🛡 shield your home. Grab ❄ to freeze everyone for a few seconds.</p>
+    <p style="opacity:0.7">Swipe to move • WASD/Arrows • 👁 C cycles cameras • ❄ F • 🛡 Space</p>
+    <div class="diff-row" id="diffRow" role="radiogroup" aria-label="Difficulty">
+      <button data-diff="cubs">🐣 Cubs</button>
+      <button data-diff="apes" class="sel">🦍 Apes</button>
+      <button data-diff="kings">👑 Kings</button>
+    </div>
+    <div class="stats-row" id="statsRow"></div>
     <button class="start" id="startBtn">Start</button>
   </div>
 
@@ -156,26 +252,49 @@
     const ROUND_SECONDS = 60;
     const BANANA_FOREST_COUNT = 12;
     const HERO_SPEED = 7.5;
-    const AI_SPEED = 5.8;
-    const GUARD_SPEED = 4.2;
+    const AI_SPEED_BASE = 5.8;          // overridden per difficulty
+    const AI_LEADER_PENALTY = 0.85;     // leader AI slows down for rubber-band
+    const GUARD_BASE_SPEED = 3.8;       // unalerted patrol/return speed
+    const GUARD_CHASE_MULT = 1.6;       // chase = base × mult
     const GUARD_PATROL_R = 3.2;
-    const GUARD_DETECT_R = 4.5;
+    const GUARD_DETECT_R = 4.5;         // base scan radius
+    const GUARD_ALERT_DETECT_R = 5.5;   // expanded radius once already alerted
+    const GUARD_ALERT_DURATION = 1.5;   // stay alerted this many seconds after losing sight
     const GUARD_CATCH_R = 1.1;
     const SHIELD_DURATION = 5.0;
-    const SHIELD_COST = 5;
-    const FREEZE_DURATION = 3.0;
+    const SHIELD_COSTS = [5, 8, 12, 16];// escalates per use within a round
+    const SHIELD_COOLDOWN = 8.0;        // seconds after expiry before recast
+    const FREEZE_DURATION = 2.0;        // shortened from 3.0
+    const MAX_FREEZE_CHARGES = 1;       // hoarding cap (was 3)
+    const FREEZE_BOOST_MULT = 1.3;      // hero speed multiplier while own freeze active
     const STUN_DURATION = 1.2;
     const HOUSE_WALL_HALF = 2.2;
     // Must be > GUARD_PATROL_R so the hero can stand at the *outside* edge of
-    // the patrol circle and still be in range. Otherwise the steal zone is
-    // enclosed by the patrol path and the hero cannot enter without being caught.
+    // the patrol circle and still be in range.
     const STEAL_RADIUS = 4.0;
+    const STEAL_RATE = 1.5;             // bananas/sec while channeling
     const MONKEY_RADIUS = 0.65;
     const BANANA_RADIUS = 0.5;
     const FREEZE_PICKUP_R = 0.9;
+    const FOREST_RESPAWN_BASE = 2.5;    // seconds; late-round scarcity adds on top
+    const FOREST_RESPAWN_EXTRA = 2.0;
+    const GOLDEN_TIME = 10;             // seconds remaining when "golden minute" kicks in
+    const GOLDEN_MULT = 2;              // score events double in golden minute
+    const SHAKE_DURATION = 0.35;
+    const SHAKE_INTENSITY = 0.55;
+    const STUN_FLASH_DURATION = 0.45;
+    const CAM_TRANSITION = 0.4;
     const CAMS = ['TOP', 'CHASE', 'CLOSE', 'ORBIT'];
-    const SWIPE_DEADZONE = 14;   // px — below this, no movement
-    const SWIPE_MAX = 70;        // px — full-speed swipe radius (joystick visual)
+    const SWIPE_DEADZONE = 14;
+    const SWIPE_MAX = 70;
+
+    const DIFFICULTY = {
+      cubs:  { label: '🐣 Cubs',  aiSpeed: 5.4, startFreezeItems: 2 },
+      apes:  { label: '🦍 Apes',  aiSpeed: 5.8, startFreezeItems: 1 },
+      kings: { label: '👑 Kings', aiSpeed: 6.4, startFreezeItems: 0 },
+    };
+    let difficultyKey = 'apes';
+    let AI_SPEED = DIFFICULTY[difficultyKey].aiSpeed;
 
     const SPAWN = [
       { id:'hero', name:'You',   color:0xff9f1c, emoji:'🐵', isHero:true,  homeX:  HALF*0.62, homeZ:  HALF*0.62 },
@@ -199,6 +318,9 @@
     const joystick = document.getElementById('joystick');
     const joystickBase = joystick.querySelector('.base');
     const joystickStick = joystick.querySelector('.stick');
+    const stunFlash = document.getElementById('stun-flash');
+    const diffRow = document.getElementById('diffRow');
+    const statsRow = document.getElementById('statsRow');
 
     // ===== Renderer / Scene / Camera =====
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -463,6 +585,11 @@
     // hero.heading to avoid an input→heading→camera→input feedback loop that
     // would otherwise make the monkey spin in circles when holding left/right.
     let cameraYaw = 0;
+    let camTransitionUntil = 0;
+    let shakeUntil = 0;
+    let stunFlashUntil = 0;
+    const pendingRespawns = [];   // timestamps when forest bananas should respawn
+    const floatingScores = [];    // {sprite, life, ttl}
     const orbit = { az: Math.PI/4, el: Math.PI/3.5, r: 28 };
 
     const input = {
@@ -516,27 +643,108 @@
     }
 
     // ===== HUD / toast / buttons =====
-    function renderHUD() {
+    function buildHUD() {
       hud.innerHTML = '';
       for (const m of monkeys) {
         const el = document.createElement('div');
-        el.className = 'score' + (m.isHero ? ' hero' : '') + (m.shieldActive ? ' shielded' : '');
-        el.textContent = `${m.emoji} ${m.name}: ${m.score}`;
+        el.className = 'score' + (m.isHero ? ' hero' : '');
+        el.innerHTML = `<span class="chip-icon">${m.emoji}</span><span class="chip-name">${m.name}</span><span class="chip-score">${m.score}</span>`;
         hud.appendChild(el);
+        m.chip = el;
+        m.chipScoreEl = el.querySelector('.chip-score');
       }
     }
+    function updateHUD() {
+      for (const m of monkeys) {
+        if (!m.chip) continue;
+        if (m.chipScoreEl.textContent !== String(m.score)) m.chipScoreEl.textContent = m.score;
+        m.chip.classList.toggle('shielded', m.shieldActive);
+      }
+    }
+    function flashChip(m, delta) {
+      if (!m.chip) return;
+      m.chip.classList.remove('pop'); void m.chip.offsetWidth; m.chip.classList.add('pop');
+      const d = document.createElement('span');
+      d.className = 'delta ' + (delta >= 0 ? 'pos' : 'neg');
+      d.textContent = (delta > 0 ? '+' : '') + delta;
+      m.chip.appendChild(d);
+      setTimeout(() => d.remove(), 820);
+      updateHUD();
+    }
+
+    // 3D world-space score-delta sprite that floats up over the monkey
+    const _floatTexCache = new Map();
+    function floatScoreTexture(text, color) {
+      const key = text + '|' + color;
+      if (_floatTexCache.has(key)) return _floatTexCache.get(key);
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 88;
+      const ctx = c.getContext('2d');
+      ctx.font = 'bold 56px system-ui, "Segoe UI Emoji", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(text, 128, 44);
+      ctx.fillStyle = color;
+      ctx.fillText(text, 128, 44);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      _floatTexCache.set(key, tex);
+      return tex;
+    }
+    function spawnFloatScore(m, delta) {
+      const text = (delta > 0 ? '+' : '') + delta + ' 🍌';
+      const color = delta > 0 ? '#7dffac' : '#ff8b8b';
+      const tex = floatScoreTexture(text, color);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(2.0, 0.7, 1);
+      sprite.position.set(m.x, 2.0, m.z);
+      scene.add(sprite);
+      floatingScores.push({ sprite, life: 0, ttl: 0.85 });
+    }
+
+    function awardScore(m, delta) {
+      // Apply golden-minute multiplier to gains AND symmetrical losses
+      const mult = (timeLeft < GOLDEN_TIME && running) ? GOLDEN_MULT : 1;
+      const eff = delta * mult;
+      m.score += eff;
+      if (m.score < 0) m.score = 0;
+      flashChip(m, eff);
+      spawnFloatScore(m, eff);
+      if (m.isHero) updateButtons();
+      return eff;
+    }
+
+    function triggerStunFX() {
+      shakeUntil = elapsed + SHAKE_DURATION;
+      stunFlashUntil = elapsed + STUN_FLASH_DURATION;
+    }
+
     let _toastTimer = 0;
-    function showToast(text, ms = 1500) {
+    function showToast(text, kind = '', ms = 1500) {
       toast.textContent = text;
+      toast.className = ''; // reset
       toast.classList.add('show');
+      if (kind) toast.classList.add(kind);
       clearTimeout(_toastTimer);
       _toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
+    }
+    function shieldCostNow(hero) {
+      const idx = Math.min(hero.shieldsUsed || 0, SHIELD_COSTS.length - 1);
+      return SHIELD_COSTS[idx];
     }
     function updateButtons() {
       const hero = monkeys[0];
       if (!hero) { shieldBtn.disabled = true; freezeBtn.disabled = true; return; }
-      shieldBtn.disabled = !(running && hero.score >= SHIELD_COST && !hero.shieldActive);
-      freezeBtn.disabled = !(running && hero.freezeCharges > 0 && elapsed >= freezeUntil);
+      const shieldCost = shieldCostNow(hero);
+      const shieldReady = running && hero.score >= shieldCost && !hero.shieldActive && elapsed >= (hero.shieldReadyAt || 0);
+      shieldBtn.disabled = !shieldReady;
+      shieldBtn.classList.toggle('ready', shieldReady);
+      shieldBtn.setAttribute('aria-label', `Shield home (cost ${shieldCost} bananas)`);
+      shieldBtn.title = `Build house shield, ${shieldCost}🍌 (Space)`;
+      const freezeReady = running && hero.freezeCharges > 0 && elapsed >= freezeUntil;
+      freezeBtn.disabled = !freezeReady;
+      freezeBtn.classList.toggle('ready', freezeReady);
       if (hero.freezeCharges > 0) {
         freezeBadge.hidden = false;
         freezeBadge.textContent = hero.freezeCharges;
@@ -630,13 +838,19 @@
           heading: angle,
           score: 0,
           freezeCharges: 0,
+          freezeBoostUntil: 0,
           shieldActive: false,
           shieldEndsAt: 0,
+          shieldReadyAt: 0,
+          shieldsUsed: 0,
           stunUntil: 0,
           targetBanana: null,
+          targetFreeze: null,
           targetHouseIdx: -1,
           decisionAt: 0,
-          _lastStealMap: {},
+          _stealProgress: {},
+          chip: null,
+          chipScoreEl: null,
         });
       }
       for (let i = 0; i < SPAWN.length; i++) {
@@ -650,10 +864,15 @@
         guards.push({
           ownerIdx: i, mesh: gd.group, sprite: gd.sprite,
           x: gx, z: gz, patrolAngle: a,
+          alertUntil: 0, alertTarget: null,
         });
       }
       for (let i = 0; i < BANANA_FOREST_COUNT; i++) spawnBanana();
-      spawnFreezeItem();
+      const startFreeze = DIFFICULTY[difficultyKey].startFreezeItems;
+      for (let i = 0; i < startFreeze; i++) spawnFreezeItem();
+      pendingRespawns.length = 0;
+      // Build the HUD chips once monkeys are known
+      buildHUD();
     }
 
     // ===== Camera =====
@@ -661,9 +880,6 @@
       const hero = monkeys[0];
       if (!hero) return;
       const mode = CAMS[camMode];
-      // Re-align cameraYaw with hero.heading ONLY when the monkey is essentially
-      // stopped. While moving, yaw stays fixed so input direction can't feed back
-      // into camera rotation (which previously caused the monkey to spin).
       if (mode === 'CHASE' || mode === 'CLOSE') {
         const vMag = Math.hypot(hero.vx, hero.vz);
         if (vMag < 0.5) {
@@ -674,26 +890,45 @@
         }
       }
       const hx = hero.x, hz = hero.z;
+      // Compute target position + lookAt
+      let tpx, tpy, tpz, tlx, tly, tlz;
       if (mode === 'TOP') {
-        camera.position.set(hx, 30, hz + 0.01);
-        camera.lookAt(hx, 0, hz);
+        tpx = hx; tpy = 30; tpz = hz + 0.01;
+        tlx = hx; tly = 0;  tlz = hz;
       } else if (mode === 'CHASE') {
-        const bx = -Math.cos(cameraYaw) * 6.5;
-        const bz = -Math.sin(cameraYaw) * 6.5;
-        const target = new THREE.Vector3(hx + bx, 5, hz + bz);
-        camera.position.lerp(target, Math.min(1, dt * 6));
-        camera.lookAt(hx + Math.cos(cameraYaw) * 2, 1.2, hz + Math.sin(cameraYaw) * 2);
+        tpx = hx - Math.cos(cameraYaw) * 6.5; tpy = 5; tpz = hz - Math.sin(cameraYaw) * 6.5;
+        tlx = hx + Math.cos(cameraYaw) * 2; tly = 1.2; tlz = hz + Math.sin(cameraYaw) * 2;
       } else if (mode === 'CLOSE') {
-        const fx = Math.cos(cameraYaw);
-        const fz = Math.sin(cameraYaw);
-        camera.position.set(hx - fx * 3.0, 2.4, hz - fz * 3.0);
-        camera.lookAt(hx, 1.0, hz);
+        tpx = hx - Math.cos(cameraYaw) * 3.0; tpy = 2.4; tpz = hz - Math.sin(cameraYaw) * 3.0;
+        tlx = hx; tly = 1.0; tlz = hz;
       } else { // ORBIT
-        const cx = hx + Math.cos(orbit.az) * Math.cos(orbit.el) * orbit.r;
-        const cy = Math.sin(orbit.el) * orbit.r;
-        const cz = hz + Math.sin(orbit.az) * Math.cos(orbit.el) * orbit.r;
-        camera.position.set(cx, cy, cz);
-        camera.lookAt(hx, 1.2, hz);
+        tpx = hx + Math.cos(orbit.az) * Math.cos(orbit.el) * orbit.r;
+        tpy = Math.sin(orbit.el) * orbit.r;
+        tpz = hz + Math.sin(orbit.az) * Math.cos(orbit.el) * orbit.r;
+        tlx = hx; tly = 1.2; tlz = hz;
+      }
+      const inTransition = elapsed < camTransitionUntil;
+      if (inTransition) {
+        const k = Math.min(1, dt * 9);
+        camera.position.x += (tpx - camera.position.x) * k;
+        camera.position.y += (tpy - camera.position.y) * k;
+        camera.position.z += (tpz - camera.position.z) * k;
+      } else if (mode === 'CHASE') {
+        const k = Math.min(1, dt * 6);
+        camera.position.x += (tpx - camera.position.x) * k;
+        camera.position.y += (tpy - camera.position.y) * k;
+        camera.position.z += (tpz - camera.position.z) * k;
+      } else {
+        camera.position.set(tpx, tpy, tpz);
+      }
+      camera.lookAt(tlx, tly, tlz);
+      // Shake (after look-at so we offset in screen-space)
+      if (elapsed < shakeUntil) {
+        const t = (shakeUntil - elapsed) / SHAKE_DURATION;
+        const intensity = SHAKE_INTENSITY * t * t;
+        camera.position.x += (Math.random() - 0.5) * intensity;
+        camera.position.y += (Math.random() - 0.5) * intensity * 0.4;
+        camera.position.z += (Math.random() - 0.5) * intensity;
       }
       hero.sprite.visible = true;
       if (hero.hiRing) hero.hiRing.visible = true;
@@ -703,6 +938,8 @@
       camMode = (camMode + 1) % CAMS.length;
       const mode = CAMS[camMode];
       camLabel.textContent = mode;
+      camLabel.classList.remove('flash'); void camLabel.offsetWidth; camLabel.classList.add('flash');
+      camTransitionUntil = elapsed + CAM_TRANSITION;
       if ((mode === 'CHASE' || mode === 'CLOSE') && monkeys[0]) {
         cameraYaw = monkeys[0].heading;
       }
@@ -715,7 +952,7 @@
         orbit.az = Math.atan2(dz, dx);
         orbit.el = Math.max(0.2, Math.min(Math.PI/2 - 0.1, Math.asin(dy / orbit.r)));
       }
-      showToast(`Camera: ${mode}`);
+      // (intentionally no toast — cam-label slide handles the visual)
     }
 
     // ===== Input =====
@@ -782,33 +1019,68 @@
     function tryShield() {
       const hero = monkeys[0];
       if (!hero || !running) return;
-      if (hero.shieldActive) { showToast('🛡 Shield already up'); return; }
-      if (hero.score < SHIELD_COST) { showToast(`Need ${SHIELD_COST} 🍌 to build shield`); return; }
-      hero.score -= SHIELD_COST;
+      if (hero.shieldActive) { showToast('🛡 Shield already up', 'bad'); return; }
+      if (elapsed < (hero.shieldReadyAt || 0)) {
+        const wait = Math.ceil((hero.shieldReadyAt || 0) - elapsed);
+        showToast(`🛡 Cooling down… ${wait}s`, 'bad'); return;
+      }
+      const cost = shieldCostNow(hero);
+      if (hero.score < cost) { showToast(`Need ${cost} 🍌 to build shield`, 'bad'); return; }
+      hero.score -= cost;
+      flashChip(hero, -cost);
       hero.shieldActive = true;
       hero.shieldEndsAt = elapsed + SHIELD_DURATION;
+      hero.shieldReadyAt = elapsed + SHIELD_DURATION + SHIELD_COOLDOWN;
+      hero.shieldsUsed = (hero.shieldsUsed || 0) + 1;
       houses[0].shield.visible = true;
-      showToast(`🛡 Shield up for ${SHIELD_DURATION}s!`);
-      renderHUD();
+      showToast(`🛡 Shield up ${SHIELD_DURATION}s! Next costs ${shieldCostNow(hero)}🍌`, 'good');
+      updateHUD();
       updateButtons();
     }
     function tryFreeze() {
       const hero = monkeys[0];
       if (!hero || !running) return;
-      if (hero.freezeCharges <= 0) { showToast('No ❄ charges'); return; }
+      if (hero.freezeCharges <= 0) { showToast('No ❄ charges', 'bad'); return; }
       if (elapsed < freezeUntil) return;
       hero.freezeCharges -= 1;
       freezeUntil = elapsed + FREEZE_DURATION;
-      showToast(`❄ Everyone frozen ${FREEZE_DURATION}s!`);
+      hero.freezeBoostUntil = elapsed + FREEZE_DURATION;
+      showToast(`❄ Everyone frozen — you're boosted!`, 'good');
       updateButtons();
     }
 
     // ===== AI =====
+    function leaderIdx() {
+      let best = 0;
+      for (let i = 1; i < monkeys.length; i++) if (monkeys[i].score > monkeys[best].score) best = i;
+      return best;
+    }
     function pickAITarget(ai, idx) {
+      // Defensive branch: if AI is the leader and a sizable lead, head home when threatened
+      const lead = leaderIdx();
+      const own = monkeys[idx];
+      if (idx === lead && own.score >= 3) {
+        for (let j = 0; j < monkeys.length; j++) {
+          if (j === idx) continue;
+          const mj = monkeys[j];
+          if (dist2(mj.x, mj.z, own.homeX, own.homeZ) < 8 * 8) {
+            ai.targetBanana = null;
+            ai.targetHouseIdx = -2; // -2 = defend own home (move toward it)
+            return;
+          }
+        }
+      }
+      // Otherwise: pick best banana / best house, weighting houses by owner score (richer = more attractive)
       let bestB = null, bestBd = Infinity;
       for (const b of bananas) {
         const d = dist2(ai.x, ai.z, b.x, b.z);
         if (d < bestBd) { bestBd = d; bestB = b; }
+      }
+      // Prefer freeze items when they're around — small detour, big payoff
+      let bestF = null, bestFd = Infinity;
+      for (const f of freezeItems) {
+        const d = dist2(ai.x, ai.z, f.x, f.z);
+        if (d < bestFd) { bestFd = d; bestF = f; }
       }
       let bestH = null, bestHd = Infinity;
       for (const h of houses) {
@@ -816,8 +1088,12 @@
         const owner = monkeys[h.ownerIdx];
         if (owner.score <= 0 || owner.shieldActive) continue;
         const d = dist2(ai.x, ai.z, h.x, h.z);
-        if (d < bestHd) { bestHd = d; bestH = h; }
+        // The richer the owner, the more attractive (divide distance by score weight)
+        const weighted = d / (1 + owner.score * 0.18);
+        if (weighted < bestHd) { bestHd = weighted; bestH = h; }
       }
+      ai.targetFreeze = null;
+      if (bestF && bestFd < (bestBd * 0.7)) { ai.targetFreeze = bestF; ai.targetBanana = null; ai.targetHouseIdx = -1; return; }
       if (bestH && (!bestB || bestHd < bestBd * 0.8)) {
         ai.targetBanana = null;
         ai.targetHouseIdx = bestH.ownerIdx;
@@ -901,8 +1177,9 @@
       const m2 = Math.hypot(dx, dz);
       if (m2 > 1e-5) { dx /= m2; dz /= m2; }
 
-      hero.vx = dx * HERO_SPEED * speedScale;
-      hero.vz = dz * HERO_SPEED * speedScale;
+      const boost = elapsed < (hero.freezeBoostUntil || 0) ? FREEZE_BOOST_MULT : 1;
+      hero.vx = dx * HERO_SPEED * speedScale * boost;
+      hero.vz = dz * HERO_SPEED * speedScale * boost;
       moveMonkey(hero, dt);
       if (dx !== 0 || dz !== 0) hero.heading = Math.atan2(dz, dx);
     }
@@ -910,17 +1187,21 @@
     function updateAI(ai, idx, dt) {
       if (elapsed < ai.stunUntil) { ai.vx = 0; ai.vz = 0; return; }
       if (elapsed < freezeUntil) { ai.vx = 0; ai.vz = 0; return; }
-      const targetValid = ai.targetBanana
-        ? bananas.includes(ai.targetBanana)
-        : (ai.targetHouseIdx >= 0
-            && !monkeys[ai.targetHouseIdx].shieldActive
-            && monkeys[ai.targetHouseIdx].score > 0);
+      const targetValid =
+        ai.targetFreeze ? freezeItems.includes(ai.targetFreeze) :
+        ai.targetBanana ? bananas.includes(ai.targetBanana) :
+        ai.targetHouseIdx === -2 ? true :
+        ai.targetHouseIdx >= 0
+          ? (!monkeys[ai.targetHouseIdx].shieldActive && monkeys[ai.targetHouseIdx].score > 0)
+          : false;
       if (!targetValid || elapsed >= ai.decisionAt) {
         pickAITarget(ai, idx);
         ai.decisionAt = elapsed + 1.4 + Math.random();
       }
       let tx, tz;
-      if (ai.targetBanana) { tx = ai.targetBanana.x; tz = ai.targetBanana.z; }
+      if (ai.targetFreeze) { tx = ai.targetFreeze.x; tz = ai.targetFreeze.z; }
+      else if (ai.targetBanana) { tx = ai.targetBanana.x; tz = ai.targetBanana.z; }
+      else if (ai.targetHouseIdx === -2) { tx = ai.homeX; tz = ai.homeZ; }
       else if (ai.targetHouseIdx >= 0) { tx = houses[ai.targetHouseIdx].x; tz = houses[ai.targetHouseIdx].z; }
       else { tx = 0; tz = 0; }
       let dx = tx - ai.x, dz = tz - ai.z;
@@ -931,10 +1212,23 @@
       dx += -dz * wob; dz += dx * wob;
       const mm = Math.hypot(dx, dz) || 1;
       dx /= mm; dz /= mm;
-      ai.vx = dx * AI_SPEED;
-      ai.vz = dz * AI_SPEED;
+      const isLeader = (leaderIdx() === idx) && ai.score >= 3;
+      const sp = AI_SPEED * (isLeader ? AI_LEADER_PENALTY : 1);
+      ai.vx = dx * sp;
+      ai.vz = dz * sp;
       moveMonkey(ai, dt);
       if (Math.abs(ai.vx) + Math.abs(ai.vz) > 0.1) ai.heading = Math.atan2(ai.vz, ai.vx);
+
+      // AI freeze: if AI has a charge and a juicy target is right ahead, pop it.
+      if (ai.freezeCharges > 0 && elapsed >= freezeUntil) {
+        const tDist = Math.hypot(tx - ai.x, tz - ai.z);
+        if (tDist > 6 && tDist < 14 && (ai.targetHouseIdx >= 0 || ai.targetBanana)) {
+          ai.freezeCharges -= 1;
+          freezeUntil = elapsed + FREEZE_DURATION;
+          ai.freezeBoostUntil = elapsed + FREEZE_DURATION;
+          showToast(`${ai.name} unleashed ❄!`, 'bad');
+        }
+      }
     }
 
     function updateGuards(dt) {
@@ -942,30 +1236,43 @@
         const g = guards[i];
         const house = houses[i];
         const owner = monkeys[i];
+        const wasAlerted = elapsed < (g.alertUntil || 0);
+        const detectR2 = (wasAlerted ? GUARD_ALERT_DETECT_R : GUARD_DETECT_R) ** 2;
         let intruder = null;
         if (elapsed >= freezeUntil) {
+          // Re-scan; pick the closest valid intruder
+          let bestD = Infinity;
           for (let j = 0; j < monkeys.length; j++) {
             if (j === i) continue;
             const mj = monkeys[j];
             if (elapsed < mj.stunUntil) continue;
             const d = dist2(g.x, g.z, mj.x, mj.z);
-            if (d < GUARD_DETECT_R * GUARD_DETECT_R) { intruder = mj; break; }
+            if (d < detectR2 && d < bestD) { bestD = d; intruder = mj; }
+          }
+          // If already alerted to a specific target who escaped sight, keep pursuing briefly
+          if (!intruder && wasAlerted && g.alertTarget && elapsed < g.alertTarget.stunUntil === false) {
+            const mj = g.alertTarget;
+            if (mj && elapsed >= mj.stunUntil) intruder = mj;
           }
         }
         let dx = 0, dz = 0, sp = 0;
         if (intruder) {
+          g.alertUntil = elapsed + GUARD_ALERT_DURATION;
+          g.alertTarget = intruder;
           dx = intruder.x - g.x; dz = intruder.z - g.z;
           const dd = Math.hypot(dx, dz) || 0.001;
           dx /= dd; dz /= dd;
-          sp = GUARD_SPEED * 1.25;
+          sp = GUARD_BASE_SPEED * GUARD_CHASE_MULT;
           if (dd < GUARD_CATCH_R + MONKEY_RADIUS) {
             intruder.stunUntil = elapsed + STUN_DURATION;
+            intruder._stealProgress = null;
             if (intruder.score > 0) {
-              intruder.score -= 1;
-              owner.score += 1;
-              renderHUD();
-              if (intruder.isHero) showToast(`Caught! ${owner.name}'s guard took 1 🍌`);
-              else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`);
+              awardScore(intruder, -1);
+              awardScore(owner, +1);
+              if (intruder.isHero) { showToast(`Caught by ${owner.name}'s guard! −1 🍌`, 'bad'); triggerStunFX(); }
+              else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`, 'good');
+            } else if (intruder.isHero) {
+              showToast(`Caught — stunned!`, 'bad'); triggerStunFX();
             }
             const bx = intruder.x - g.x, bz = intruder.z - g.z;
             const bd = Math.hypot(bx, bz) || 0.001;
@@ -982,74 +1289,95 @@
           dx = tx - g.x; dz = tz - g.z;
           const dd = Math.hypot(dx, dz) || 0.001;
           dx /= dd; dz /= dd;
-          sp = GUARD_SPEED;
+          sp = GUARD_BASE_SPEED;
+          if (!wasAlerted) g.alertTarget = null;
         }
         g.x += dx * sp * dt;
         g.z += dz * sp * dt;
         // leash
         const dFromHouse = Math.hypot(g.x - house.x, g.z - house.z);
-        const maxLeash = GUARD_DETECT_R + 1;
+        const maxLeash = GUARD_ALERT_DETECT_R + 1;
         if (dFromHouse > maxLeash) {
           const f = maxLeash / dFromHouse;
           g.x = house.x + (g.x - house.x) * f;
           g.z = house.z + (g.z - house.z) * f;
         }
         g.mesh.position.set(g.x, 0, g.z);
-        g.sprite.material.color.setHex(elapsed < freezeUntil ? 0x88ccff : 0xffe0e0);
+        const tint = elapsed < freezeUntil ? 0x88ccff : (elapsed < (g.alertUntil || 0) ? 0xffaaaa : 0xffe0e0);
+        g.sprite.material.color.setHex(tint);
       }
     }
 
-    function collectAndSteal() {
-      // Forest bananas
+    function collectAndSteal(dt) {
+      // Forest bananas — scheduled respawn (queue) so the world thins out late round
       for (let i = bananas.length - 1; i >= 0; i--) {
         const b = bananas[i];
         for (const m of monkeys) {
           if (elapsed < m.stunUntil) continue;
           if (elapsed < freezeUntil && !m.isHero) continue;
           if (dist2(m.x, m.z, b.x, b.z) < (MONKEY_RADIUS + BANANA_RADIUS) ** 2) {
-            m.score += 1;
+            awardScore(m, +1);
             scene.remove(b.mesh);
             bananas.splice(i, 1);
-            spawnBanana();
-            renderHUD();
-            if (m.isHero) updateButtons();
+            scheduleForestRespawn();
             break;
           }
         }
       }
-      // Freeze pickups (hero only)
-      const hero = monkeys[0];
-      if (hero && elapsed >= hero.stunUntil) {
-        for (let i = freezeItems.length - 1; i >= 0; i--) {
-          const f = freezeItems[i];
-          if (dist2(hero.x, hero.z, f.x, f.z) < (MONKEY_RADIUS + FREEZE_PICKUP_R) ** 2) {
-            hero.freezeCharges = Math.min(3, hero.freezeCharges + 1);
+      // Freeze pickups — any monkey can grab them now
+      for (let i = freezeItems.length - 1; i >= 0; i--) {
+        const f = freezeItems[i];
+        for (const m of monkeys) {
+          if (elapsed < m.stunUntil) continue;
+          if (elapsed < freezeUntil && !m.isHero) continue;
+          if (dist2(m.x, m.z, f.x, f.z) < (MONKEY_RADIUS + FREEZE_PICKUP_R) ** 2) {
+            m.freezeCharges = Math.min(MAX_FREEZE_CHARGES, (m.freezeCharges || 0) + 1);
             scene.remove(f.mesh);
             freezeItems.splice(i, 1);
-            showToast('❄ +1 freeze!');
-            updateButtons();
+            if (m.isHero) { showToast('❄ +1 freeze charge!', 'good'); updateButtons(); }
+            else showToast(`${m.name} grabbed ❄!`, 'bad');
             break;
           }
         }
       }
-      // Stealing
+      // Channeled stealing — accumulate progress while in range, banana awarded when ≥ 1
       for (const m of monkeys) {
-        if (elapsed < m.stunUntil) continue;
-        if (elapsed < freezeUntil && !m.isHero) continue;
+        if (!m._stealProgress) m._stealProgress = {};
+        if (elapsed < m.stunUntil) { m._stealProgress = {}; continue; }
+        if (elapsed < freezeUntil && !m.isHero) { m._stealProgress = {}; continue; }
         for (const h of houses) {
           const owner = monkeys[h.ownerIdx];
           if (owner === m) continue;
-          if (owner.shieldActive) continue;
-          if (owner.score <= 0) continue;
-          if (dist2(m.x, m.z, h.x, h.z) >= STEAL_RADIUS * STEAL_RADIUS) continue;
           const key = h.ownerIdx;
-          if (elapsed - (m._lastStealMap[key] || -10) < 0.6) continue;
-          m._lastStealMap[key] = elapsed;
-          owner.score -= 1;
-          m.score += 1;
-          renderHUD();
-          if (m.isHero) { showToast(`Stole 1 🍌 from ${owner.name}!`); updateButtons(); }
-          else if (owner.isHero) showToast(`${m.name} stole from you!`);
+          if (owner.shieldActive || owner.score <= 0
+              || dist2(m.x, m.z, h.x, h.z) >= STEAL_RADIUS * STEAL_RADIUS) {
+            // Out of range / blocked — reset progress for this house
+            if (m._stealProgress[key]) m._stealProgress[key] = 0;
+            continue;
+          }
+          m._stealProgress[key] = (m._stealProgress[key] || 0) + STEAL_RATE * dt;
+          while (m._stealProgress[key] >= 1 && owner.score > 0) {
+            m._stealProgress[key] -= 1;
+            awardScore(owner, -1);
+            awardScore(m, +1);
+            if (m.isHero) showToast(`Stole 1 🍌 from ${owner.name}!`, 'good');
+            else if (owner.isHero) showToast(`${m.name} stole from you!`, 'bad');
+          }
+        }
+      }
+    }
+
+    function scheduleForestRespawn() {
+      // Delay scales with elapsed (late round = scarcer)
+      const progress = elapsed / ROUND_SECONDS;
+      const delay = FOREST_RESPAWN_BASE + progress * FOREST_RESPAWN_EXTRA;
+      pendingRespawns.push(elapsed + delay);
+    }
+    function tickForestRespawns() {
+      for (let i = pendingRespawns.length - 1; i >= 0; i--) {
+        if (elapsed >= pendingRespawns[i]) {
+          spawnBanana();
+          pendingRespawns.splice(i, 1);
         }
       }
     }
@@ -1064,8 +1392,8 @@
         if (m.shieldActive && elapsed >= m.shieldEndsAt) {
           m.shieldActive = false;
           houses[i].shield.visible = false;
-          renderHUD();
-          if (m.isHero) { showToast('🛡 Shield down'); updateButtons(); }
+          updateHUD();
+          if (m.isHero) { showToast('🛡 Shield down', '', 1100); updateButtons(); }
         }
       }
     }
@@ -1080,18 +1408,63 @@
         f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
         f.mesh.userData.ring.rotation.z += dt * 1.2;
       }
+      // Hero high-light ring rotates so they always find themselves easily
+      const hero = monkeys[0];
+      if (hero && hero.hiRing) hero.hiRing.rotation.z += dt * 0.8;
       for (let i = 0; i < houses.length; i++) {
         const sh = houses[i].shield;
         if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
-        // Steal hint: ring + stash visible only when this house has bananas to steal
         const owner = monkeys[i];
         const stealable = owner && owner.score > 0 && !owner.shieldActive;
+        const isOwn = owner && owner.isHero;
         const ring = houses[i].stealRing;
         if (ring) {
-          ring.visible = stealable;
-          if (stealable) ring.material.opacity = 0.45 + Math.sin(elapsed * 3 + i) * 0.18;
+          // Own house always shows a cool-blue "HOME" ring; rivals show owner-tinted yellow that pulses
+          if (isOwn) {
+            ring.visible = true;
+            ring.material.color.setHex(0x66ccff);
+            ring.material.opacity = 0.28 + Math.sin(elapsed * 1.5) * 0.06;
+          } else {
+            ring.visible = stealable;
+            if (stealable) {
+              // Mix owner color (so you can read territory) with yellow stealability hint
+              ring.material.color.setHex(0xffd166);
+              ring.material.opacity = 0.45 + Math.sin(elapsed * 3 + i) * 0.18;
+            }
+          }
         }
-        if (houses[i].stashGroup) houses[i].stashGroup.visible = stealable;
+        const sg = houses[i].stashGroup;
+        if (sg) {
+          sg.visible = stealable && !isOwn;
+          if (sg.visible) {
+            sg.rotation.y += dt * 0.5;
+            // Bob individual banana sprites
+            for (let bi = 0; bi < sg.children.length; bi++) {
+              const sp = sg.children[bi];
+              sp.position.y = 0.3 + (bi % 3) * 0.18 + Math.sin(elapsed * 2.5 + bi) * 0.08;
+            }
+          }
+        }
+      }
+      // Floating 3D score deltas
+      for (let i = floatingScores.length - 1; i >= 0; i--) {
+        const fs = floatingScores[i];
+        fs.life += dt;
+        fs.sprite.position.y += dt * 1.6;
+        const t = fs.life / fs.ttl;
+        fs.sprite.material.opacity = Math.max(0, 1 - t * t);
+        if (fs.life >= fs.ttl) {
+          scene.remove(fs.sprite);
+          fs.sprite.material.dispose();
+          floatingScores.splice(i, 1);
+        }
+      }
+      // Stun flash vignette decay
+      if (elapsed < stunFlashUntil) {
+        const remaining = stunFlashUntil - elapsed;
+        stunFlash.style.opacity = Math.min(1, (remaining / STUN_FLASH_DURATION) * 1.2);
+      } else if (stunFlash.style.opacity !== '0') {
+        stunFlash.style.opacity = 0;
       }
     }
 
@@ -1113,14 +1486,20 @@
         elapsed += dt;
         timeLeft -= dt;
         if (timeLeft <= 0) { timeLeft = 0; endRound(); }
-        else timerEl.textContent = Math.ceil(timeLeft);
+        else {
+          timerEl.textContent = Math.ceil(timeLeft);
+          timerEl.classList.toggle('warn', timeLeft <= 15 && timeLeft > 5);
+          timerEl.classList.toggle('danger', timeLeft <= 5);
+          timerEl.classList.toggle('golden', timeLeft <= GOLDEN_TIME && timeLeft > 0);
+        }
 
         updateHero(dt);
         for (let i = 1; i < monkeys.length; i++) updateAI(monkeys[i], i, dt);
         updateGuards(dt);
-        collectAndSteal();
+        collectAndSteal(dt);
         updateShields();
         maybeSpawnFreeze();
+        tickForestRespawns();
         updateButtons();
       }
       animateItems(dt);
@@ -1129,14 +1508,26 @@
     }
 
     function startRound() {
+      AI_SPEED = DIFFICULTY[difficultyKey].aiSpeed;
       initWorld();
       timeLeft = ROUND_SECONDS;
       elapsed = 0;
       freezeUntil = 0;
+      shakeUntil = 0;
+      stunFlashUntil = 0;
+      camTransitionUntil = 0;
+      stunFlash.style.opacity = 0;
       input.swipeStart = null;
       input.swipeCurrent = null;
       hideJoystick();
       camMode = 0; camLabel.textContent = CAMS[camMode];
+      timerEl.classList.remove('warn', 'danger', 'golden');
+      // Clear any lingering floating-score sprites from a previous round
+      for (const fs of floatingScores) {
+        scene.remove(fs.sprite);
+        fs.sprite.material.dispose();
+      }
+      floatingScores.length = 0;
       overlay.classList.add('hidden');
       timerEl.textContent = ROUND_SECONDS;
       // snap camera to top-down over hero on start
@@ -1144,22 +1535,36 @@
       cameraYaw = h0.heading;
       camera.position.set(h0.x, 30, h0.z + 0.01);
       camera.lookAt(h0.x, 0, h0.z);
-      renderHUD();
+      updateHUD();
       updateButtons();
       running = true;
     }
 
     function endRound() {
       running = false;
+      timerEl.classList.remove('warn', 'danger', 'golden');
+      const hero = monkeys[0];
       const ranked = monkeys.slice().sort((a, b) => b.score - a.score);
       const winner = ranked[0];
+
+      // Persist stats
+      const heroWon = winner.isHero;
+      stats.games += 1;
+      stats.best = Math.max(stats.best, hero.score);
+      stats.streak = heroWon ? stats.streak + 1 : 0;
+      stats.totalBananas += Math.max(0, hero.score);
+      saveStats();
+
       overlay.innerHTML = '';
+      const mascot = document.createElement('div');
+      mascot.className = 'mascot';
+      mascot.textContent = heroWon ? '🏆' : (winner.emoji || '🐵');
       const h = document.createElement('h1');
-      h.textContent = winner.isHero
-        ? `🏆 You won! ${winner.score} 🍌`
+      h.textContent = heroWon
+        ? `You won! ${hero.score} 🍌`
         : `${winner.emoji} ${winner.name} won with ${winner.score} 🍌`;
       const sub = document.createElement('p');
-      sub.textContent = winner.isHero ? 'King of the forest!' : 'Try again — out-steal them next time!';
+      sub.textContent = heroWon ? 'King of the forest!' : 'Try again — out-steal them next time!';
       const board = document.createElement('div');
       board.className = 'leaderboard';
       ranked.forEach((m, i) => {
@@ -1168,19 +1573,79 @@
         row.innerHTML = `<span>${i + 1}. ${m.emoji} ${m.name}</span><span>${m.score} 🍌</span>`;
         board.appendChild(row);
       });
+      const sRow = document.createElement('div');
+      sRow.className = 'stats-row';
+      sRow.innerHTML = `Best <b>${stats.best}</b> • Streak <b>${stats.streak}</b> • Games <b>${stats.games}</b> • Total <b>${stats.totalBananas}</b>🍌`;
+      const dRow = makeDiffRow();
       const btn = document.createElement('button');
       btn.className = 'start';
       btn.textContent = 'Play again';
       btn.addEventListener('click', startRound);
+      overlay.appendChild(mascot);
       overlay.appendChild(h);
       overlay.appendChild(sub);
       overlay.appendChild(board);
+      overlay.appendChild(sRow);
+      overlay.appendChild(dRow);
       overlay.appendChild(btn);
       overlay.classList.remove('hidden');
       updateButtons();
     }
+    function makeDiffRow() {
+      const row = document.createElement('div');
+      row.className = 'diff-row';
+      row.setAttribute('role', 'radiogroup');
+      row.setAttribute('aria-label', 'Difficulty');
+      for (const key of Object.keys(DIFFICULTY)) {
+        const b = document.createElement('button');
+        b.dataset.diff = key;
+        b.textContent = DIFFICULTY[key].label;
+        if (key === difficultyKey) b.classList.add('sel');
+        b.addEventListener('click', () => {
+          difficultyKey = key;
+          row.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x.dataset.diff === key));
+        });
+        row.appendChild(b);
+      }
+      return row;
+    }
 
     startBtn.addEventListener('click', startRound);
+
+    // ===== Stats persistence =====
+    const STATS_KEY = 'mf.stats.v1';
+    const stats = { best: 0, streak: 0, games: 0, totalBananas: 0 };
+    function loadStats() {
+      try {
+        const raw = localStorage.getItem(STATS_KEY);
+        if (!raw) return;
+        const j = JSON.parse(raw);
+        if (typeof j.best === 'number') stats.best = j.best;
+        if (typeof j.streak === 'number') stats.streak = j.streak;
+        if (typeof j.games === 'number') stats.games = j.games;
+        if (typeof j.totalBananas === 'number') stats.totalBananas = j.totalBananas;
+      } catch (e) {}
+    }
+    function saveStats() {
+      try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) {}
+    }
+    loadStats();
+
+    // Wire start-overlay difficulty selector
+    diffRow.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        difficultyKey = b.dataset.diff;
+        diffRow.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b));
+      });
+    });
+    function renderStartStats() {
+      if (stats.games > 0) {
+        statsRow.innerHTML = `Best <b>${stats.best}</b>🍌 • Streak <b>${stats.streak}</b> • Games <b>${stats.games}</b>`;
+      } else {
+        statsRow.textContent = '';
+      }
+    }
+    renderStartStats();
 
     // ===== Boot =====
     resize();
