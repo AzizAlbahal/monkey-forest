@@ -232,7 +232,7 @@
   <div id="overlay">
     <div class="mascot">🐵</div>
     <h1>Monkey Forest</h1>
-    <p>Grab 🍌 from the forest <b>or</b> sneak into other monkeys' houses to steal — but watch out for their guards! Spend 🍌 to 🛡 shield your home. Grab ❄ to freeze everyone for a few seconds.</p>
+    <p>Grab 🍌 from the forest <b>or</b> sneak into rival piles to steal — but watch out for their guards! Pay 🍌 for 🛡 — your stronger shield blocks steals, repels rivals, makes you guard-immune and 20% faster. Grab ❄ to freeze everyone briefly.</p>
     <p style="opacity:0.7">Swipe to move • WASD/Arrows • 👁 C cycles cameras • ❄ F • 🛡 Space</p>
     <div class="diff-row" id="diffRow" role="radiogroup" aria-label="Difficulty">
       <button data-diff="cubs">🐣 Cubs</button>
@@ -261,9 +261,11 @@
     const GUARD_ALERT_DETECT_R = 5.5;   // expanded radius once already alerted
     const GUARD_ALERT_DURATION = 1.5;   // stay alerted this many seconds after losing sight
     const GUARD_CATCH_R = 1.1;
-    const SHIELD_DURATION = 5.0;
+    const SHIELD_DURATION = 7.0;        // longer fortification window
     const SHIELD_COSTS = [5, 8, 12, 16];// escalates per use within a round
     const SHIELD_COOLDOWN = 8.0;        // seconds after expiry before recast
+    const SHIELD_SPEED_BOOST = 1.2;     // hero moves 20% faster while shielded
+    const SHIELD_REPEL_R = 2.6;         // rivals pushed out from this radius around a shielded pile
     const FREEZE_DURATION = 2.0;        // shortened from 3.0
     const MAX_FREEZE_CHARGES = 1;       // hoarding cap (was 3)
     const FREEZE_BOOST_MULT = 1.3;      // hero speed multiplier while own freeze active
@@ -493,13 +495,29 @@
       const pileContainer = new THREE.Group();
       pileContainer.position.y = 0.26;
       g.add(pileContainer);
-      // Shield dome — covers the pile
+      // Shield dome + counter-rotating energy rings
+      const shieldGroup = new THREE.Group();
+      shieldGroup.visible = false;
+      g.add(shieldGroup);
       const shield = new THREE.Mesh(
-        new THREE.SphereGeometry(2.4, 24, 16, 0, Math.PI*2, 0, Math.PI/2),
-        new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
+        new THREE.SphereGeometry(2.5, 28, 18, 0, Math.PI*2, 0, Math.PI/2),
+        new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false })
       );
-      shield.visible = false;
-      g.add(shield);
+      shieldGroup.add(shield);
+      const shieldRing1 = new THREE.Mesh(
+        new THREE.RingGeometry(2.5, 2.7, 56),
+        new THREE.MeshBasicMaterial({ color: 0x88e0ff, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
+      );
+      shieldRing1.rotation.x = -Math.PI / 2;
+      shieldRing1.position.y = 0.45;
+      shieldGroup.add(shieldRing1);
+      const shieldRing2 = new THREE.Mesh(
+        new THREE.RingGeometry(2.3, 2.5, 56),
+        new THREE.MeshBasicMaterial({ color: 0xbbf0ff, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false })
+      );
+      shieldRing2.rotation.x = -Math.PI / 2;
+      shieldRing2.position.y = 1.15;
+      shieldGroup.add(shieldRing2);
       // Steal-zone ring on the ground
       const stealRing = new THREE.Mesh(
         new THREE.RingGeometry(STEAL_RADIUS - 0.18, STEAL_RADIUS, 56),
@@ -515,7 +533,7 @@
       plate.position.y = 3.2;
       g.add(plate);
       g.position.set(spawn.homeX, 0, spawn.homeZ);
-      return { group: g, shield, stealRing, pileContainer };
+      return { group: g, shield: shieldGroup, shieldDome: shield, shieldRing1, shieldRing2, stealRing, pileContainer };
     }
 
     // Phyllotaxis-style stacking position for the n-th banana in a pile
@@ -890,6 +908,7 @@
 
       // === Hero hi-ring (gold glow under the player monkey) ===
       let hiRing = null;
+      let shieldHalo = null;
       if (spawn.isHero) {
         hiRing = new THREE.Mesh(
           new THREE.RingGeometry(0.97, 1.18, 32),
@@ -898,10 +917,18 @@
         hiRing.rotation.x = -Math.PI / 2;
         hiRing.position.y = 0.05;
         g.add(hiRing);
+        // Blue shield halo — appears only while shielded
+        shieldHalo = new THREE.Mesh(
+          new THREE.RingGeometry(1.0, 1.35, 40),
+          new THREE.MeshBasicMaterial({ color: 0x66ccff, side: THREE.DoubleSide, transparent: true, opacity: 0, depthWrite: false })
+        );
+        shieldHalo.rotation.x = -Math.PI / 2;
+        shieldHalo.position.y = 0.06;
+        g.add(shieldHalo);
       }
 
       return {
-        group: g, headSprite, ring, hiRing,
+        group: g, headSprite, ring, hiRing, shieldHalo,
         bodyGroup, torso, belly, headGroup, tailBase,
         eyeL, eyeR, pupilL, pupilR, browL, browR,
         leftArm: la.shoulder, rightArm: ra.shoulder,
@@ -1341,7 +1368,9 @@
         scene.add(h.group);
         houses.push({
           ownerIdx: i, x: sp.homeX, z: sp.homeZ,
-          group: h.group, shield: h.shield, stealRing: h.stealRing,
+          group: h.group, shield: h.shield,
+          shieldDome: h.shieldDome, shieldRing1: h.shieldRing1, shieldRing2: h.shieldRing2,
+          stealRing: h.stealRing,
           pileContainer: h.pileContainer,
           pileBananas: [],  // dynamic — synced to owner.score in animateItems
         });
@@ -1357,6 +1386,7 @@
         monkeys.push({
           ...sp,
           mesh: m.group, sprite: m.headSprite, ring: m.ring, hiRing: m.hiRing,
+          shieldHalo: m.shieldHalo,
           bodyGroup: m.bodyGroup, torso: m.torso, belly: m.belly,
           headGroup: m.headGroup,
           eyeL: m.eyeL, eyeR: m.eyeR, pupilL: m.pupilL, pupilR: m.pupilR,
@@ -1572,7 +1602,7 @@
       hero.shieldsUsed = (hero.shieldsUsed || 0) + 1;
       houses[0].shield.visible = true;
       SFX.shield();
-      showToast(`🛡 Shield up ${SHIELD_DURATION}s! Next costs ${shieldCostNow(hero)}🍌`, 'good');
+      showToast(`🛡 Fortified ${SHIELD_DURATION}s — immune + faster! Next: ${shieldCostNow(hero)}🍌`, 'good');
       updateHUD();
       updateButtons();
     }
@@ -1668,6 +1698,17 @@
       // Pile platform — soft circular block so monkeys don't stand inside the bananas
       const PILE_BLOCK_R = 1.35;
       for (const h of houses) {
+        const owner = monkeys[h.ownerIdx];
+        // Active shield repulsion: rivals can't get near a shielded owner's pile
+        if (owner && owner !== m && owner.shieldActive) {
+          const dd = dist2(nx, nz, h.x, h.z);
+          if (dd < SHIELD_REPEL_R * SHIELD_REPEL_R) {
+            const d = Math.sqrt(dd) || 0.001;
+            nx = h.x + (nx - h.x) / d * SHIELD_REPEL_R;
+            nz = h.z + (nz - h.z) / d * SHIELD_REPEL_R;
+            continue; // skip the normal platform block — already pushed further out
+          }
+        }
         const dd = dist2(nx, nz, h.x, h.z);
         const minD = MONKEY_RADIUS + PILE_BLOCK_R;
         if (dd < minD * minD) {
@@ -1722,8 +1763,9 @@
       if (m2 > 1e-5) { dx /= m2; dz /= m2; }
 
       const boost = elapsed < (hero.freezeBoostUntil || 0) ? FREEZE_BOOST_MULT : 1;
-      hero.vx = dx * HERO_SPEED * speedScale * boost;
-      hero.vz = dz * HERO_SPEED * speedScale * boost;
+      const shieldBoost = hero.shieldActive ? SHIELD_SPEED_BOOST : 1;
+      hero.vx = dx * HERO_SPEED * speedScale * boost * shieldBoost;
+      hero.vz = dz * HERO_SPEED * speedScale * boost * shieldBoost;
       moveMonkey(hero, dt);
       if (dx !== 0 || dz !== 0) hero.heading = Math.atan2(dz, dx);
     }
@@ -1808,21 +1850,34 @@
           dx /= dd; dz /= dd;
           sp = GUARD_BASE_SPEED * GUARD_CHASE_MULT;
           if (dd < GUARD_CATCH_R + MONKEY_RADIUS) {
-            intruder.stunUntil = elapsed + STUN_DURATION;
-            intruder._stealProgress = null;
-            if (intruder.score > 0) {
-              awardScore(intruder, -1);
-              awardScore(owner, +1);
-              if (intruder.isHero) { showToast(`Caught by ${owner.name}'s guard! −1 🍌`, 'bad'); triggerStunFX(); SFX.caught(); }
-              else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`, 'good');
-            } else if (intruder.isHero) {
-              showToast(`Caught — stunned!`, 'bad'); triggerStunFX(); SFX.caught();
+            if (intruder.shieldActive) {
+              // Shielded intruder is invulnerable — repel the guard back instead
+              const gbx = g.x - intruder.x, gbz = g.z - intruder.z;
+              const gbd = Math.hypot(gbx, gbz) || 0.001;
+              g.x += (gbx / gbd) * 2.5;
+              g.z += (gbz / gbd) * 2.5;
+              g.alertUntil = 0;
+              if (intruder.isHero && elapsed - (intruder._lastShieldDeflectAt || -10) > 1.0) {
+                intruder._lastShieldDeflectAt = elapsed;
+                showToast('🛡 Shield deflected!', 'good');
+              }
+            } else {
+              intruder.stunUntil = elapsed + STUN_DURATION;
+              intruder._stealProgress = null;
+              if (intruder.score > 0) {
+                awardScore(intruder, -1);
+                awardScore(owner, +1);
+                if (intruder.isHero) { showToast(`Caught by ${owner.name}'s guard! −1 🍌`, 'bad'); triggerStunFX(); SFX.caught(); }
+                else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`, 'good');
+              } else if (intruder.isHero) {
+                showToast(`Caught — stunned!`, 'bad'); triggerStunFX(); SFX.caught();
+              }
+              const bx = intruder.x - g.x, bz = intruder.z - g.z;
+              const bd = Math.hypot(bx, bz) || 0.001;
+              intruder.x += (bx / bd) * 3;
+              intruder.z += (bz / bd) * 3;
+              intruder.mesh.position.set(intruder.x, 0, intruder.z);
             }
-            const bx = intruder.x - g.x, bz = intruder.z - g.z;
-            const bd = Math.hypot(bx, bz) || 0.001;
-            intruder.x += (bx / bd) * 3;
-            intruder.z += (bz / bd) * 3;
-            intruder.mesh.position.set(intruder.x, 0, intruder.z);
           }
         } else if (elapsed < freezeUntil) {
           dx = 0; dz = 0; sp = 0;
@@ -2069,12 +2124,31 @@
       // Hero high-light ring rotates so they always find themselves easily
       const hero = monkeys[0];
       if (hero && hero.hiRing) hero.hiRing.rotation.z += dt * 0.8;
+      // Shield halo — visible only while shielded, pulses and counter-rotates
+      if (hero && hero.shieldHalo) {
+        if (hero.shieldActive) {
+          hero.shieldHalo.material.opacity = 0.55 + Math.sin(elapsed * 6) * 0.3;
+          hero.shieldHalo.rotation.z -= dt * 2.2;
+        } else {
+          hero.shieldHalo.material.opacity *= 0.85;
+        }
+      }
       // Per-house: shield pulse, steal-ring, and pile sync (add/remove banana sprites to match owner.score)
       const PILE_MAX_VIS = 40;
       for (let i = 0; i < houses.length; i++) {
         const h = houses[i];
         const sh = h.shield;
-        if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
+        if (sh.visible) {
+          if (h.shieldDome)  h.shieldDome.material.opacity  = 0.30 + Math.sin(elapsed * 4 + i) * 0.08;
+          if (h.shieldRing1) {
+            h.shieldRing1.rotation.z += dt * 1.4;
+            h.shieldRing1.material.opacity = 0.6 + Math.sin(elapsed * 4) * 0.25;
+          }
+          if (h.shieldRing2) {
+            h.shieldRing2.rotation.z -= dt * 0.9;
+            h.shieldRing2.material.opacity = 0.5 + Math.sin(elapsed * 3 + Math.PI/2) * 0.22;
+          }
+        }
         const owner = monkeys[i];
         const stealable = owner && owner.score > 0 && !owner.shieldActive;
         const isOwn = owner && owner.isHero;
