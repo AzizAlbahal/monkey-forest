@@ -1,4 +1,4 @@
-const CACHE = 'monkey-forest-v8';
+const CACHE = 'monkey-forest-v9';
 const ASSETS = [
   './',
   './index.html',

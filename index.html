@@ -594,7 +594,8 @@
     let stunFlashUntil = 0;
     const pendingRespawns = [];   // timestamps when forest bananas should respawn
     const floatingScores = [];    // {sprite, life, ttl}
-    const stealFlights = [];      // {sprite, fromX, fromY, fromZ, toMonkey, t, ttl}
+    const stealAnims = [];        // two-phase: hand reach (phase 1) → banana arc back (phase 2)
+    const dustPuffs = [];         // {sprite, life, ttl, r0}
     const orbit = { az: Math.PI/4, el: Math.PI/3.5, r: 28 };
 
     const input = {
@@ -736,15 +737,95 @@
       return m.emoji;
     }
 
-    // 🍌 sprite arcing from a thief's hands away from the rival's stash
-    function spawnStealFlight(fromX, fromY, fromZ, toMonkey) {
-      const mat = new THREE.SpriteMaterial({ map: emojiTexture('🍌', 64), transparent: true, depthWrite: false });
+    // Two-phase heist: monkey's hand reaches toward the stash, swaps to a banana,
+    // then the banana arcs back to the thief and triggers onLand (score + chime).
+    function spawnStealAnim(thief, house, onLand) {
+      const sgPos = new THREE.Vector3();
+      if (house.stashGroup) house.stashGroup.getWorldPosition(sgPos);
+      else sgPos.set(house.x, 0.5, house.z);
+      const mat = new THREE.SpriteMaterial({ map: emojiTexture('🤚', 128), transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.9, 0.9, 1);
-      sprite.position.set(fromX, fromY, fromZ);
+      sprite.scale.set(0.95, 0.95, 1);
+      sprite.position.set(thief.x, 1.2, thief.z);
       scene.add(sprite);
-      stealFlights.push({ sprite, fromX, fromY, fromZ, toMonkey, t: 0, ttl: 0.5 });
+      stealAnims.push({
+        phase: 1, sprite, thief,
+        sx: thief.x, sy: 1.2, sz: thief.z,
+        tx: sgPos.x, ty: sgPos.y + 0.55, tz: sgPos.z,
+        t: 0, ttl: 0.26,
+        onLand,
+      });
     }
+
+    // Dust puff under fast-running feet
+    let _dustTex = null;
+    function dustTexture() {
+      if (_dustTex) return _dustTex;
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0,   'rgba(200,180,140,0.6)');
+      grad.addColorStop(0.55,'rgba(200,180,140,0.22)');
+      grad.addColorStop(1,   'rgba(200,180,140,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      _dustTex = new THREE.CanvasTexture(c);
+      _dustTex.colorSpace = THREE.SRGBColorSpace;
+      return _dustTex;
+    }
+    function spawnDust(x, z) {
+      const mat = new THREE.SpriteMaterial({ map: dustTexture(), transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      const r = 0.35 + Math.random() * 0.2;
+      sprite.scale.set(r, r, 1);
+      sprite.position.set(x + (Math.random() - 0.5) * 0.4, 0.12, z + (Math.random() - 0.5) * 0.4);
+      scene.add(sprite);
+      dustPuffs.push({ sprite, life: 0, ttl: 0.5, r0: r });
+    }
+
+    // ===== Audio (Web Audio API — no asset files) =====
+    let _audioCtx = null;
+    function audioCtx() {
+      if (_audioCtx !== null) return _audioCtx;
+      try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { _audioCtx = false; }
+      return _audioCtx || null;
+    }
+    function unlockAudio() {
+      const c = audioCtx();
+      if (c && c.state === 'suspended') c.resume();
+    }
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown',     unlockAudio, { passive: true });
+
+    function tone(freqStart, freqEnd, dur, type, gainPeak) {
+      const c = audioCtx();
+      if (!c) return;
+      if (c.state === 'suspended') c.resume();
+      const now = c.currentTime;
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freqStart, now);
+      if (freqEnd && freqEnd !== freqStart) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), now + dur);
+      }
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(gainPeak, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(g).connect(c.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    }
+    const SFX = {
+      pickup: () => tone(880, 1320, 0.14, 'sine',     0.14),
+      land:   () => { tone(660, 0, 0.18, 'triangle', 0.10); tone(990, 0, 0.22, 'sine', 0.06); },
+      caught: () => tone(330, 110, 0.35, 'sawtooth', 0.12),
+      shield: () => { tone(523, 0, 0.4, 'sine', 0.08); tone(659, 0, 0.4, 'sine', 0.06); tone(784, 0, 0.4, 'sine', 0.05); },
+      freeze: () => tone(880, 220, 0.45, 'sine',     0.10),
+      win:    () => { tone(523, 0, 0.18, 'triangle', 0.12); setTimeout(() => tone(659, 0, 0.18, 'triangle', 0.12), 140); setTimeout(() => tone(784, 0, 0.35, 'triangle', 0.14), 280); },
+    };
 
     let _toastTimer = 0;
     function showToast(text, kind = '', ms = 1500) {
@@ -1059,6 +1140,7 @@
       hero.shieldReadyAt = elapsed + SHIELD_DURATION + SHIELD_COOLDOWN;
       hero.shieldsUsed = (hero.shieldsUsed || 0) + 1;
       houses[0].shield.visible = true;
+      SFX.shield();
       showToast(`🛡 Shield up ${SHIELD_DURATION}s! Next costs ${shieldCostNow(hero)}🍌`, 'good');
       updateHUD();
       updateButtons();
@@ -1071,6 +1153,7 @@
       hero.freezeCharges -= 1;
       freezeUntil = elapsed + FREEZE_DURATION;
       hero.freezeBoostUntil = elapsed + FREEZE_DURATION;
+      SFX.freeze();
       showToast(`❄ Everyone frozen — you're boosted!`, 'good');
       updateButtons();
     }
@@ -1295,10 +1378,10 @@
             if (intruder.score > 0) {
               awardScore(intruder, -1);
               awardScore(owner, +1);
-              if (intruder.isHero) { showToast(`Caught by ${owner.name}'s guard! −1 🍌`, 'bad'); triggerStunFX(); }
+              if (intruder.isHero) { showToast(`Caught by ${owner.name}'s guard! −1 🍌`, 'bad'); triggerStunFX(); SFX.caught(); }
               else if (owner.isHero) showToast(`Your guard caught ${intruder.name}! +1 🍌`, 'good');
             } else if (intruder.isHero) {
-              showToast(`Caught — stunned!`, 'bad'); triggerStunFX();
+              showToast(`Caught — stunned!`, 'bad'); triggerStunFX(); SFX.caught();
             }
             const bx = intruder.x - g.x, bz = intruder.z - g.z;
             const bd = Math.hypot(bx, bz) || 0.001;
@@ -1344,6 +1427,7 @@
           if (dist2(m.x, m.z, b.x, b.z) < (MONKEY_RADIUS + BANANA_RADIUS) ** 2) {
             awardScore(m, +1);
             m.lastJoyAt = elapsed + 0.5;
+            if (m.isHero) SFX.pickup();
             scene.remove(b.mesh);
             bananas.splice(i, 1);
             scheduleForestRespawn();
@@ -1383,19 +1467,19 @@
             continue;
           }
           m._stealProgress[key] = (m._stealProgress[key] || 0) + STEAL_RATE * dt;
-          // While channeling, even before a full banana is awarded, show the joy face
           if (m._stealProgress[key] > 0.1) m.lastJoyAt = elapsed + 0.4;
           while (m._stealProgress[key] >= 1 && owner.score > 0) {
             m._stealProgress[key] -= 1;
-            // Visible heist: actual 🍌 sprite flies from the rival's stash to the thief
-            const sgPos = new THREE.Vector3();
-            if (h.stashGroup) h.stashGroup.getWorldPosition(sgPos);
-            else sgPos.set(h.x, 0.5, h.z);
-            spawnStealFlight(sgPos.x, sgPos.y + 0.6, sgPos.z, m);
+            // Owner loses immediately (their stash visibly shrinks)
             awardScore(owner, -1);
-            awardScore(m, +1);
-            m.lastJoyAt = elapsed + 0.6;
-            if (m.isHero) showToast(`Stole 1 🍌 from ${owner.name}!`, 'good');
+            // Thief's hand reaches → grabs → banana flies back. Score lands when banana lands.
+            const thief = m;
+            spawnStealAnim(thief, h, () => {
+              awardScore(thief, +1);
+              thief.lastJoyAt = elapsed + 0.5;
+              if (thief.isHero) SFX.land();
+            });
+            if (m.isHero) showToast(`Snatching from ${owner.name}!`, 'good');
             else if (owner.isHero) showToast(`${m.name} stole from you!`, 'bad');
           }
         }
@@ -1445,7 +1529,7 @@
         f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
         f.mesh.userData.ring.rotation.z += dt * 1.2;
       }
-      // Per-monkey personality: emoji swap + walk waddle / idle breath
+      // Per-monkey personality: emoji swap + walk waddle / idle breath + dust puffs
       for (const m of monkeys) {
         const e = effectiveEmoji(m);
         if (m._currentEmoji !== e) {
@@ -1455,13 +1539,16 @@
         const vMag = Math.hypot(m.vx, m.vz);
         m.spritePhase = (m.spritePhase || 0) + dt * (vMag > 0.5 ? 12 : 1.6);
         if (vMag > 0.5) {
-          // Walk waddle — emphatic up-bounce + side wobble
           m.sprite.position.y = 1.05 + Math.abs(Math.sin(m.spritePhase)) * 0.20;
           m.sprite.material.rotation = Math.sin(m.spritePhase * 0.5) * 0.18;
         } else {
-          // Idle breath — gentle vertical + steady rotation rest
           m.sprite.position.y = 1.05 + Math.sin(m.spritePhase) * 0.05;
           m.sprite.material.rotation += (0 - m.sprite.material.rotation) * 0.2;
+        }
+        // Dust puffs under fast feet (throttled per monkey)
+        if (vMag > 5 && elapsed - (m._lastDustAt || 0) > 0.07) {
+          m._lastDustAt = elapsed;
+          spawnDust(m.x, m.z);
         }
       }
       // Hero high-light ring rotates so they always find themselves easily
@@ -1515,24 +1602,61 @@
           }
         }
       }
-      // Steal-flight 🍌 — arc from rival's stash to the thief
-      for (let i = stealFlights.length - 1; i >= 0; i--) {
-        const f = stealFlights[i];
-        f.t += dt;
-        const u = Math.min(1, f.t / f.ttl);
-        const eu = 1 - (1 - u) * (1 - u); // ease-out
-        const tx = f.toMonkey.x, ty = 1.4, tz = f.toMonkey.z;
-        f.sprite.position.x = f.fromX + (tx - f.fromX) * eu;
-        f.sprite.position.z = f.fromZ + (tz - f.fromZ) * eu;
-        // Parabolic arc up over halfway, down to the monkey's hand-height
-        f.sprite.position.y = f.fromY + (ty - f.fromY) * eu + Math.sin(u * Math.PI) * 1.8;
-        // Spin a little for personality
-        f.sprite.material.rotation = u * Math.PI * 2;
-        f.sprite.material.opacity = u < 0.85 ? 1 : Math.max(0, (1 - u) / 0.15);
-        if (u >= 1) {
-          scene.remove(f.sprite);
-          f.sprite.material.dispose();
-          stealFlights.splice(i, 1);
+      // Two-phase heist anim: 🤚 hand reaches to stash, then 🍌 arcs back to thief
+      for (let i = stealAnims.length - 1; i >= 0; i--) {
+        const a = stealAnims[i];
+        a.t += dt;
+        if (a.phase === 1) {
+          // Hand reaching toward the stash (ease-in)
+          const u = Math.min(1, a.t / a.ttl);
+          const eu = u * u;
+          a.sprite.position.x = a.sx + (a.tx - a.sx) * eu;
+          a.sprite.position.y = a.sy + (a.ty - a.sy) * eu;
+          a.sprite.position.z = a.sz + (a.tz - a.sz) * eu;
+          a.sprite.material.rotation = u * 0.45;
+          if (u >= 1) {
+            // GRAB! Swap to banana and prepare return arc
+            a.sprite.material.map = emojiTexture('🍌', 64);
+            a.sprite.scale.set(0.85, 0.85, 1);
+            a.phase = 2; a.t = 0; a.ttl = 0.42;
+            a.sx = a.sprite.position.x;
+            a.sy = a.sprite.position.y;
+            a.sz = a.sprite.position.z;
+          }
+        } else {
+          // Banana arcing back to thief
+          const u = Math.min(1, a.t / a.ttl);
+          const eu = 1 - (1 - u) * (1 - u);
+          const tx = a.thief.x, ty = 1.5, tz = a.thief.z;
+          a.sprite.position.x = a.sx + (tx - a.sx) * eu;
+          a.sprite.position.z = a.sz + (tz - a.sz) * eu;
+          a.sprite.position.y = a.sy + (ty - a.sy) * eu + Math.sin(u * Math.PI) * 1.6;
+          a.sprite.material.rotation = u * Math.PI * 2;
+          // Final scale burst right before landing for "+1🍌" pop punch
+          const baseScale = 0.85;
+          const burst = u > 0.85 ? (1 + (u - 0.85) * 5) : 1;
+          a.sprite.scale.set(baseScale * burst, baseScale * burst, 1);
+          a.sprite.material.opacity = u < 0.9 ? 1 : Math.max(0, (1 - u) / 0.1);
+          if (u >= 1) {
+            if (a.onLand) a.onLand();
+            scene.remove(a.sprite);
+            a.sprite.material.dispose();
+            stealAnims.splice(i, 1);
+          }
+        }
+      }
+      // Dust puffs — grow + fade
+      for (let i = dustPuffs.length - 1; i >= 0; i--) {
+        const d = dustPuffs[i];
+        d.life += dt;
+        const u = d.life / d.ttl;
+        const r = d.r0 * (1 + u * 1.4);
+        d.sprite.scale.set(r, r, 1);
+        d.sprite.material.opacity = Math.max(0, 1 - u);
+        if (d.life >= d.ttl) {
+          scene.remove(d.sprite);
+          d.sprite.material.dispose();
+          dustPuffs.splice(i, 1);
         }
       }
       // Floating 3D score deltas
@@ -1611,17 +1735,14 @@
       hideJoystick();
       camMode = 0; camLabel.textContent = CAMS[camMode];
       timerEl.classList.remove('warn', 'danger', 'golden');
-      // Clear any lingering floating-score sprites + steal flights from a previous round
-      for (const fs of floatingScores) {
-        scene.remove(fs.sprite);
-        fs.sprite.material.dispose();
-      }
+      // Clear any lingering one-shot sprites from a previous round
+      for (const fs of floatingScores) { scene.remove(fs.sprite); fs.sprite.material.dispose(); }
       floatingScores.length = 0;
-      for (const sf of stealFlights) {
-        scene.remove(sf.sprite);
-        sf.sprite.material.dispose();
-      }
-      stealFlights.length = 0;
+      for (const sa of stealAnims) { scene.remove(sa.sprite); sa.sprite.material.dispose(); }
+      stealAnims.length = 0;
+      for (const dp of dustPuffs) { scene.remove(dp.sprite); dp.sprite.material.dispose(); }
+      dustPuffs.length = 0;
+      unlockAudio();
       overlay.classList.add('hidden');
       timerEl.textContent = ROUND_SECONDS;
       // snap camera to top-down over hero on start
@@ -1648,6 +1769,7 @@
       stats.streak = heroWon ? stats.streak + 1 : 0;
       stats.totalBananas += Math.max(0, hero.score);
       saveStats();
+      if (heroWon) SFX.win();
 
       overlay.innerHTML = '';
       const mascot = document.createElement('div');
