@@ -525,9 +525,13 @@
       ring.position.y = 0.04;
       const sprite = makeSprite(emojiTexture('🐵', 256), 1.15);
       sprite.position.y = 0.65;
-      sprite.material.color.setHex(0xffe0e0); // pinkish tint to distinguish from main monkeys
-      g.add(shadow); g.add(ring); g.add(sprite);
-      return { group: g, sprite };
+      sprite.material.color.setHex(0xffe0e0);
+      // "❗" alert bubble — appears above guard's head only while alerted
+      const alertBubble = makeSprite(emojiTexture('❗', 128), 0.7);
+      alertBubble.position.y = 1.55;
+      alertBubble.visible = false;
+      g.add(shadow); g.add(ring); g.add(sprite); g.add(alertBubble);
+      return { group: g, sprite, alertBubble };
     }
 
     function makeBanana(x, z) {
@@ -590,6 +594,7 @@
     let stunFlashUntil = 0;
     const pendingRespawns = [];   // timestamps when forest bananas should respawn
     const floatingScores = [];    // {sprite, life, ttl}
+    const stealFlights = [];      // {sprite, fromX, fromY, fromZ, toMonkey, t, ttl}
     const orbit = { az: Math.PI/4, el: Math.PI/3.5, r: 28 };
 
     const input = {
@@ -718,6 +723,27 @@
     function triggerStunFX() {
       shakeUntil = elapsed + SHAKE_DURATION;
       stunFlashUntil = elapsed + STUN_FLASH_DURATION;
+    }
+
+    // State-driven emoji for each monkey — picks the most expressive face for
+    // the current moment. Priority order matches what the player most needs to see.
+    function effectiveEmoji(m) {
+      if (elapsed < m.stunUntil) return '😲';
+      if (elapsed < freezeUntil && !m.isHero) return '🥶';
+      if (m.shieldActive) return '😎';
+      if (elapsed < (m.freezeBoostUntil || 0)) return '😎';
+      if (elapsed < (m.lastJoyAt || 0)) return '😋';
+      return m.emoji;
+    }
+
+    // 🍌 sprite arcing from a thief's hands away from the rival's stash
+    function spawnStealFlight(fromX, fromY, fromZ, toMonkey) {
+      const mat = new THREE.SpriteMaterial({ map: emojiTexture('🍌', 64), transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.9, 0.9, 1);
+      sprite.position.set(fromX, fromY, fromZ);
+      scene.add(sprite);
+      stealFlights.push({ sprite, fromX, fromY, fromZ, toMonkey, t: 0, ttl: 0.5 });
     }
 
     let _toastTimer = 0;
@@ -862,7 +888,7 @@
         const gz = sp.homeZ + Math.sin(a) * GUARD_PATROL_R;
         gd.group.position.set(gx, 0, gz);
         guards.push({
-          ownerIdx: i, mesh: gd.group, sprite: gd.sprite,
+          ownerIdx: i, mesh: gd.group, sprite: gd.sprite, alertBubble: gd.alertBubble,
           x: gx, z: gz, patrolAngle: a,
           alertUntil: 0, alertTarget: null,
         });
@@ -1317,6 +1343,7 @@
           if (elapsed < freezeUntil && !m.isHero) continue;
           if (dist2(m.x, m.z, b.x, b.z) < (MONKEY_RADIUS + BANANA_RADIUS) ** 2) {
             awardScore(m, +1);
+            m.lastJoyAt = elapsed + 0.5;
             scene.remove(b.mesh);
             bananas.splice(i, 1);
             scheduleForestRespawn();
@@ -1356,10 +1383,18 @@
             continue;
           }
           m._stealProgress[key] = (m._stealProgress[key] || 0) + STEAL_RATE * dt;
+          // While channeling, even before a full banana is awarded, show the joy face
+          if (m._stealProgress[key] > 0.1) m.lastJoyAt = elapsed + 0.4;
           while (m._stealProgress[key] >= 1 && owner.score > 0) {
             m._stealProgress[key] -= 1;
+            // Visible heist: actual 🍌 sprite flies from the rival's stash to the thief
+            const sgPos = new THREE.Vector3();
+            if (h.stashGroup) h.stashGroup.getWorldPosition(sgPos);
+            else sgPos.set(h.x, 0.5, h.z);
+            spawnStealFlight(sgPos.x, sgPos.y + 0.6, sgPos.z, m);
             awardScore(owner, -1);
             awardScore(m, +1);
+            m.lastJoyAt = elapsed + 0.6;
             if (m.isHero) showToast(`Stole 1 🍌 from ${owner.name}!`, 'good');
             else if (owner.isHero) showToast(`${m.name} stole from you!`, 'bad');
           }
@@ -1399,18 +1434,40 @@
     }
 
     function animateItems(dt) {
+      // Forest banana bob
       for (const b of bananas) {
         b.mesh.userData.bobPhase += dt * 2.5;
         b.mesh.userData.sprite.position.y = 0.55 + Math.sin(b.mesh.userData.bobPhase) * 0.1;
       }
+      // Freeze items bob + ring spin
       for (const f of freezeItems) {
         f.mesh.userData.bobPhase += dt * 2.0;
         f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
         f.mesh.userData.ring.rotation.z += dt * 1.2;
       }
+      // Per-monkey personality: emoji swap + walk waddle / idle breath
+      for (const m of monkeys) {
+        const e = effectiveEmoji(m);
+        if (m._currentEmoji !== e) {
+          m.sprite.material.map = emojiTexture(e, 256);
+          m._currentEmoji = e;
+        }
+        const vMag = Math.hypot(m.vx, m.vz);
+        m.spritePhase = (m.spritePhase || 0) + dt * (vMag > 0.5 ? 12 : 1.6);
+        if (vMag > 0.5) {
+          // Walk waddle — emphatic up-bounce + side wobble
+          m.sprite.position.y = 1.05 + Math.abs(Math.sin(m.spritePhase)) * 0.20;
+          m.sprite.material.rotation = Math.sin(m.spritePhase * 0.5) * 0.18;
+        } else {
+          // Idle breath — gentle vertical + steady rotation rest
+          m.sprite.position.y = 1.05 + Math.sin(m.spritePhase) * 0.05;
+          m.sprite.material.rotation += (0 - m.sprite.material.rotation) * 0.2;
+        }
+      }
       // Hero high-light ring rotates so they always find themselves easily
       const hero = monkeys[0];
       if (hero && hero.hiRing) hero.hiRing.rotation.z += dt * 0.8;
+      // Per-house: shield pulse, steal-ring color/visibility, stash shrinkage
       for (let i = 0; i < houses.length; i++) {
         const sh = houses[i].shield;
         if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
@@ -1419,7 +1476,6 @@
         const isOwn = owner && owner.isHero;
         const ring = houses[i].stealRing;
         if (ring) {
-          // Own house always shows a cool-blue "HOME" ring; rivals show owner-tinted yellow that pulses
           if (isOwn) {
             ring.visible = true;
             ring.material.color.setHex(0x66ccff);
@@ -1427,7 +1483,6 @@
           } else {
             ring.visible = stealable;
             if (stealable) {
-              // Mix owner color (so you can read territory) with yellow stealability hint
               ring.material.color.setHex(0xffd166);
               ring.material.opacity = 0.45 + Math.sin(elapsed * 3 + i) * 0.18;
             }
@@ -1435,15 +1490,49 @@
         }
         const sg = houses[i].stashGroup;
         if (sg) {
-          sg.visible = stealable && !isOwn;
+          sg.visible = !isOwn && owner && owner.score > 0;
           if (sg.visible) {
             sg.rotation.y += dt * 0.5;
-            // Bob individual banana sprites
+            // Show only as many bananas as the owner actually has (stash shrinks as you steal)
+            const visCount = Math.min(sg.children.length, Math.max(0, owner.score));
             for (let bi = 0; bi < sg.children.length; bi++) {
               const sp = sg.children[bi];
+              sp.visible = bi < visCount;
               sp.position.y = 0.3 + (bi % 3) * 0.18 + Math.sin(elapsed * 2.5 + bi) * 0.08;
             }
           }
+        }
+      }
+      // Guards: "❗" alert bubble while in alert state
+      for (let i = 0; i < guards.length; i++) {
+        const g = guards[i];
+        if (g.alertBubble) {
+          const alerted = elapsed < (g.alertUntil || 0);
+          g.alertBubble.visible = alerted;
+          if (alerted) {
+            g.alertBubble.position.y = 1.55 + Math.sin(elapsed * 12) * 0.12;
+            g.alertBubble.material.rotation = Math.sin(elapsed * 14) * 0.25;
+          }
+        }
+      }
+      // Steal-flight 🍌 — arc from rival's stash to the thief
+      for (let i = stealFlights.length - 1; i >= 0; i--) {
+        const f = stealFlights[i];
+        f.t += dt;
+        const u = Math.min(1, f.t / f.ttl);
+        const eu = 1 - (1 - u) * (1 - u); // ease-out
+        const tx = f.toMonkey.x, ty = 1.4, tz = f.toMonkey.z;
+        f.sprite.position.x = f.fromX + (tx - f.fromX) * eu;
+        f.sprite.position.z = f.fromZ + (tz - f.fromZ) * eu;
+        // Parabolic arc up over halfway, down to the monkey's hand-height
+        f.sprite.position.y = f.fromY + (ty - f.fromY) * eu + Math.sin(u * Math.PI) * 1.8;
+        // Spin a little for personality
+        f.sprite.material.rotation = u * Math.PI * 2;
+        f.sprite.material.opacity = u < 0.85 ? 1 : Math.max(0, (1 - u) / 0.15);
+        if (u >= 1) {
+          scene.remove(f.sprite);
+          f.sprite.material.dispose();
+          stealFlights.splice(i, 1);
         }
       }
       // Floating 3D score deltas
@@ -1459,7 +1548,7 @@
           floatingScores.splice(i, 1);
         }
       }
-      // Stun flash vignette decay
+      // Stun flash vignette
       if (elapsed < stunFlashUntil) {
         const remaining = stunFlashUntil - elapsed;
         stunFlash.style.opacity = Math.min(1, (remaining / STUN_FLASH_DURATION) * 1.2);
@@ -1522,12 +1611,17 @@
       hideJoystick();
       camMode = 0; camLabel.textContent = CAMS[camMode];
       timerEl.classList.remove('warn', 'danger', 'golden');
-      // Clear any lingering floating-score sprites from a previous round
+      // Clear any lingering floating-score sprites + steal flights from a previous round
       for (const fs of floatingScores) {
         scene.remove(fs.sprite);
         fs.sprite.material.dispose();
       }
       floatingScores.length = 0;
+      for (const sf of stealFlights) {
+        scene.remove(sf.sprite);
+        sf.sprite.material.dispose();
+      }
+      stealFlights.length = 0;
       overlay.classList.add('hidden');
       timerEl.textContent = ROUND_SECONDS;
       // snap camera to top-down over hero on start
