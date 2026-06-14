@@ -400,6 +400,57 @@
       return s;
     }
 
+    // Mouth-only canvas textures — used in place of the full-face emoji so the
+    // new 3D eyes don't fight the emoji's tiny baked-in eyes.
+    const _mouthTexCache = new Map();
+    function mouthTexture(kind = 'smile') {
+      if (_mouthTexCache.has(kind)) return _mouthTexCache.get(kind);
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.lineWidth = 9;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#2a1408';
+      if (kind === 'smile') {
+        ctx.beginPath();
+        ctx.arc(64, 30, 32, 0.18 * Math.PI, 0.82 * Math.PI);
+        ctx.stroke();
+      } else if (kind === 'open') {
+        ctx.fillStyle = '#a83434';
+        ctx.beginPath();
+        ctx.ellipse(64, 60, 22, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (kind === 'flat') {
+        ctx.beginPath();
+        ctx.moveTo(36, 60); ctx.lineTo(92, 60);
+        ctx.stroke();
+      } else if (kind === 'frown') {
+        ctx.beginPath();
+        ctx.arc(64, 95, 32, 1.18 * Math.PI, 1.82 * Math.PI);
+        ctx.stroke();
+      } else if (kind === 'tongue') {
+        ctx.beginPath();
+        ctx.arc(64, 28, 30, 0.18 * Math.PI, 0.82 * Math.PI);
+        ctx.stroke();
+        ctx.fillStyle = '#ff7878';
+        ctx.beginPath();
+        ctx.ellipse(64, 70, 13, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#c84848';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(64, 60); ctx.lineTo(64, 84);
+        ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      _mouthTexCache.set(kind, tex);
+      return tex;
+    }
+
     // ===== Builders =====
     function makeTree(x, z) {
       const g = new THREE.Group();
@@ -605,9 +656,39 @@
       innerR.position.x = 0.3;
       headGroup.add(innerR);
 
-      // Face emoji — smaller now, projected onto the muzzle (still swaps with state)
-      const headSprite = makeSprite(emojiTexture(spawn.emoji, 256), 0.45);
-      headSprite.position.set(0, -0.05, 0.42);
+      // 3D EYES — big cartoon whites with pupils for life
+      const eyeWhiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const pupilMat = new THREE.MeshLambertMaterial({ color: 0x1a0c08 });
+      const browMat = new THREE.MeshLambertMaterial({ color: 0x2a1408 });
+      const eyeWhiteGeom = new THREE.SphereGeometry(0.08, 14, 12);
+      const pupilGeom = new THREE.SphereGeometry(0.045, 10, 8);
+
+      const eyeL = new THREE.Mesh(eyeWhiteGeom, eyeWhiteMat);
+      eyeL.position.set(-0.1, 0.08, 0.255);
+      headGroup.add(eyeL);
+      const eyeR = new THREE.Mesh(eyeWhiteGeom, eyeWhiteMat);
+      eyeR.position.set(0.1, 0.08, 0.255);
+      headGroup.add(eyeR);
+
+      const pupilL = new THREE.Mesh(pupilGeom, pupilMat);
+      pupilL.position.set(-0.1, 0.08, 0.31);
+      headGroup.add(pupilL);
+      const pupilR = new THREE.Mesh(pupilGeom, pupilMat);
+      pupilR.position.set(0.1, 0.08, 0.31);
+      headGroup.add(pupilR);
+
+      // Eyebrows — small dark elongated boxes; rotation expresses mood
+      const browGeom = new THREE.BoxGeometry(0.12, 0.025, 0.04);
+      const browL = new THREE.Mesh(browGeom, browMat);
+      browL.position.set(-0.1, 0.18, 0.26);
+      headGroup.add(browL);
+      const browR = new THREE.Mesh(browGeom, browMat);
+      browR.position.set(0.1, 0.18, 0.26);
+      headGroup.add(browR);
+
+      // Mouth — canvas-drawn shape on the lower muzzle (swaps with state)
+      const headSprite = makeSprite(mouthTexture('smile'), 0.34);
+      headSprite.position.set(0, -0.14, 0.43);
       headGroup.add(headSprite);
 
       // === ARMS — segmented at the elbow, pre-curled at rest ===
@@ -625,7 +706,7 @@
 
         const elbow = new THREE.Group();
         elbow.position.y = -0.26;
-        elbow.rotation.x = 0.4; // rest curl
+        elbow.rotation.x = 0.22; // gentle rest curl — relaxed, not defensive
         shoulder.add(elbow);
 
         const forearm = new THREE.Mesh(
@@ -667,11 +748,11 @@
         knee.add(shin);
 
         const foot = new THREE.Mesh(
-          new THREE.SphereGeometry(0.11, 12, 8),
+          new THREE.SphereGeometry(0.12, 12, 8),
           furMat
         );
-        foot.position.set(0, -0.27, 0.04);
-        foot.scale.set(1, 0.55, 1.7); // stretched forward → reads as foot
+        foot.position.set(0, -0.27, 0.06);
+        foot.scale.set(1.15, 0.6, 2.0); // larger + more stretched → clearly reads as a foot
         knee.add(foot);
 
         return { hip, knee };
@@ -735,6 +816,7 @@
       return {
         group: g, headSprite, ring, hiRing,
         bodyGroup, torso, belly, headGroup, tailBase,
+        eyeL, eyeR, pupilL, pupilR, browL, browR,
         leftArm: la.shoulder, rightArm: ra.shoulder,
         leftForearm: la.elbow, rightForearm: ra.elbow,
         leftLeg: ll.hip, rightLeg: rl.hip,
@@ -960,15 +1042,14 @@
       stunFlashUntil = elapsed + STUN_FLASH_DURATION;
     }
 
-    // State-driven emoji for each monkey — picks the most expressive face for
-    // the current moment. Priority order matches what the player most needs to see.
-    function effectiveEmoji(m) {
-      if (elapsed < m.stunUntil) return '😲';
-      if (elapsed < freezeUntil && !m.isHero) return '🥶';
-      if (m.shieldActive) return '😎';
-      if (elapsed < (m.freezeBoostUntil || 0)) return '😎';
-      if (elapsed < (m.lastJoyAt || 0)) return '😋';
-      return m.emoji;
+    // State-driven mouth shape — paired with eyebrow + eye animation in animateItems
+    function effectiveMouth(m) {
+      if (elapsed < m.stunUntil) return 'open';
+      if (elapsed < freezeUntil && !m.isHero) return 'frown';
+      if (m.shieldActive) return 'smile';
+      if (elapsed < (m.freezeBoostUntil || 0)) return 'smile';
+      if (elapsed < (m.lastJoyAt || 0)) return 'tongue';
+      return 'smile';
     }
 
     // Single-phase heist: grab the *actual* top banana off the pile and arc it to the thief.
@@ -1191,6 +1272,9 @@
           mesh: m.group, sprite: m.headSprite, ring: m.ring, hiRing: m.hiRing,
           bodyGroup: m.bodyGroup, torso: m.torso, belly: m.belly,
           headGroup: m.headGroup,
+          eyeL: m.eyeL, eyeR: m.eyeR, pupilL: m.pupilL, pupilR: m.pupilR,
+          browL: m.browL, browR: m.browR,
+          blinkPhase: Math.random() * 4.5,
           leftArm: m.leftArm, rightArm: m.rightArm,
           leftForearm: m.leftForearm, rightForearm: m.rightForearm,
           leftLeg: m.leftLeg, rightLeg: m.rightLeg,
@@ -1793,13 +1877,32 @@
         f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
         f.mesh.userData.ring.rotation.z += dt * 1.2;
       }
-      // Per-monkey: face emoji swap, walk cycle on limbs, body rotation, steal arm reach
+      // Per-monkey: face (mouth/brows/blink), walk cycle on limbs, body rotation, steal arm reach
       for (const m of monkeys) {
-        // Emoji face
-        const e = effectiveEmoji(m);
-        if (m._currentEmoji !== e) {
-          m.sprite.material.map = emojiTexture(e, 256);
-          m._currentEmoji = e;
+        // Mouth shape
+        const mouth = effectiveMouth(m);
+        if (m._currentMouth !== mouth) {
+          m.sprite.material.map = mouthTexture(mouth);
+          m._currentMouth = mouth;
+        }
+        // Eyebrows — angled by mood
+        let browAngle = 0;
+        if      (mouth === 'open')   browAngle = -0.35; // surprise — raised brows
+        else if (mouth === 'frown')  browAngle =  0.4;  // furrowed
+        else if (mouth === 'tongue') browAngle = -0.15; // little raise for joy
+        if (m.browL) m.browL.rotation.z = -browAngle;
+        if (m.browR) m.browR.rotation.z =  browAngle;
+        // Blink: per-monkey phase, eyes close for ~120ms every ~4.5s
+        m.blinkPhase = (m.blinkPhase || 0) + dt;
+        const cycle = m.blinkPhase % 4.5;
+        const blinkOpen = !(cycle > 4.34 && cycle < 4.46);
+        const eyeY = blinkOpen ? 1 : 0.15;
+        if (m.eyeL) { m.eyeL.scale.y = eyeY; m.eyeR.scale.y = eyeY; }
+        if (m.pupilL) { m.pupilL.scale.y = eyeY; m.pupilR.scale.y = eyeY; }
+        // When stunned, force eyes wide (no blink during shock)
+        if (elapsed < m.stunUntil && m.eyeL) {
+          m.eyeL.scale.y = 1.15; m.eyeR.scale.y = 1.15;
+          if (m.pupilL) { m.pupilL.scale.y = 1; m.pupilR.scale.y = 1; }
         }
         const vMag = Math.hypot(m.vx, m.vz);
         // Detect "currently channeling a steal" — find a target house if so
