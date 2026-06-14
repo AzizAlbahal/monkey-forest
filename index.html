@@ -420,82 +420,152 @@
       return g;
     }
 
+    // Pile platform that grows / shrinks with the owner's score. Replaces the house.
     function makeHouse(spawn) {
       const g = new THREE.Group();
-      const walls = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 2.5, 4),
-        new THREE.MeshLambertMaterial({ color: spawn.color })
+      // Wooden platform under the pile
+      const platform = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.3, 1.5, 0.25, 18),
+        new THREE.MeshLambertMaterial({ color: 0x8b5a2b })
       );
-      walls.position.y = 1.25;
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(3.2, 1.7, 4),
-        new THREE.MeshLambertMaterial({ color: 0x6a3a1a })
+      platform.position.y = 0.125;
+      g.add(platform);
+      // Owner-colored base ring around platform — territory marker
+      const baseRing = new THREE.Mesh(
+        new THREE.RingGeometry(1.4, 1.7, 36),
+        new THREE.MeshBasicMaterial({ color: spawn.color, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
       );
-      roof.position.y = 2.5 + 0.85;
-      roof.rotation.y = Math.PI / 4;
-      // door facing world center
-      const dirX = -Math.sign(spawn.homeX);
-      const dirZ = -Math.sign(spawn.homeZ);
-      const door = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.2, 1.8),
-        new THREE.MeshBasicMaterial({ color: 0x2a1810, side: THREE.DoubleSide })
-      );
-      if (Math.abs(dirX) > Math.abs(dirZ)) {
-        door.position.set(dirX * 2.01, 0.9, 0);
-        door.rotation.y = dirX > 0 ? -Math.PI/2 : Math.PI/2;
-      } else {
-        door.position.set(0, 0.9, dirZ * 2.01);
-        door.rotation.y = dirZ > 0 ? 0 : Math.PI;
-      }
-      // banana stash visible inside doorway
-      const stashGroup = new THREE.Group();
-      for (let i = 0; i < 6; i++) {
-        const s = makeSprite(emojiTexture('🍌', 64), 0.45);
-        const ang = (i / 6) * Math.PI * 2;
-        s.position.set(Math.cos(ang) * 0.4, 0.3 + (i % 3) * 0.18, Math.sin(ang) * 0.4);
-        stashGroup.add(s);
-      }
-      stashGroup.position.set(dirX * 1.5, 0, dirZ * 1.5);
-      // Shield dome (initially hidden)
+      baseRing.rotation.x = -Math.PI / 2;
+      baseRing.position.y = 0.26;
+      g.add(baseRing);
+      // Banana-pile container — sprites are added/removed each frame to match owner.score
+      const pileContainer = new THREE.Group();
+      pileContainer.position.y = 0.26;
+      g.add(pileContainer);
+      // Shield dome — covers the pile
       const shield = new THREE.Mesh(
-        new THREE.SphereGeometry(4.6, 24, 16, 0, Math.PI*2, 0, Math.PI/2),
+        new THREE.SphereGeometry(2.4, 24, 16, 0, Math.PI*2, 0, Math.PI/2),
         new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
       );
       shield.visible = false;
-      // Steal-zone ring on the ground — shown only when this house has bananas
+      g.add(shield);
+      // Steal-zone ring on the ground
       const stealRing = new THREE.Mesh(
         new THREE.RingGeometry(STEAL_RADIUS - 0.18, STEAL_RADIUS, 56),
         new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false })
       );
       stealRing.rotation.x = -Math.PI/2;
-      stealRing.position.y = 0.06;
+      stealRing.position.y = 0.07;
       stealRing.visible = false;
-      // Name plate
+      g.add(stealRing);
+      // Name plate above the pile
       const plate = makeSprite(nameTexture(spawn.name, spawn.color), 2.4);
       plate.scale.y = 0.6;
-      plate.position.y = 5.1;
-      g.add(walls); g.add(roof); g.add(door); g.add(stashGroup); g.add(stealRing); g.add(shield); g.add(plate);
+      plate.position.y = 3.2;
+      g.add(plate);
       g.position.set(spawn.homeX, 0, spawn.homeZ);
-      return { group: g, shield, stashGroup, stealRing };
+      return { group: g, shield, stealRing, pileContainer };
     }
 
+    // Phyllotaxis-style stacking position for the n-th banana in a pile
+    function pilePosition(idx) {
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const angle = idx * goldenAngle;
+      const r = Math.sqrt(idx + 0.6) * 0.19;
+      const layer = Math.floor(idx / 9);
+      return {
+        x: Math.cos(angle) * r,
+        y: 0.18 + layer * 0.16,
+        z: Math.sin(angle) * r,
+      };
+    }
+
+    // Full 3D monkey: body + 4 limbs + tail, with an emoji sprite as the face
     function makeMonkey(spawn) {
       const g = new THREE.Group();
+      const FUR = 0x6b4423;
+      const BELLY = 0xc9a07a;
+
       const shadow = new THREE.Mesh(
         new THREE.CircleGeometry(0.7, 18),
         new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })
       );
       shadow.rotation.x = -Math.PI / 2;
       shadow.position.y = 0.02;
+      g.add(shadow);
+
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.7, 0.95, 28),
         new THREE.MeshBasicMaterial({ color: spawn.color, side: THREE.DoubleSide })
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.04;
-      const sprite = makeSprite(emojiTexture(spawn.emoji, 256), 1.8);
-      sprite.position.y = 1.05;
-      g.add(shadow); g.add(ring); g.add(sprite);
+      g.add(ring);
+
+      // Torso
+      const body = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.32, 0.45, 4, 8),
+        new THREE.MeshLambertMaterial({ color: FUR })
+      );
+      body.position.y = 0.9;
+      g.add(body);
+
+      // Belly patch (front, lighter)
+      const belly = new THREE.Mesh(
+        new THREE.SphereGeometry(0.28, 12, 8),
+        new THREE.MeshLambertMaterial({ color: BELLY })
+      );
+      belly.position.set(0, 0.78, 0.18);
+      belly.scale.set(1, 1.1, 0.7);
+      g.add(belly);
+
+      // Head sprite — emoji face that always faces the camera and swaps with state
+      const headSprite = makeSprite(emojiTexture(spawn.emoji, 256), 1.0);
+      headSprite.position.y = 1.55;
+      g.add(headSprite);
+
+      // Arm helper: group pivots at shoulder; geometry hangs down
+      function makeLimb(side, kind) {
+        const grp = new THREE.Group();
+        const upperLen = kind === 'arm' ? 0.5 : 0.55;
+        const upperR  = kind === 'arm' ? 0.09 : 0.11;
+        const handR   = kind === 'arm' ? 0.12 : 0.14;
+        const upper = new THREE.Mesh(
+          new THREE.CylinderGeometry(upperR, upperR * 0.85, upperLen, 6),
+          new THREE.MeshLambertMaterial({ color: FUR })
+        );
+        upper.position.y = -upperLen / 2;
+        grp.add(upper);
+        const tip = new THREE.Mesh(
+          new THREE.SphereGeometry(handR, 8, 6),
+          new THREE.MeshLambertMaterial({ color: FUR })
+        );
+        tip.position.y = -upperLen - 0.05;
+        grp.add(tip);
+        const x = side * (kind === 'arm' ? 0.42 : 0.18);
+        const y = kind === 'arm' ? 1.1 : 0.62;
+        grp.position.set(x, y, 0);
+        return grp;
+      }
+      const leftArm  = makeLimb(-1, 'arm');
+      const rightArm = makeLimb(+1, 'arm');
+      const leftLeg  = makeLimb(-1, 'leg');
+      const rightLeg = makeLimb(+1, 'leg');
+      g.add(leftArm); g.add(rightArm); g.add(leftLeg); g.add(rightLeg);
+
+      // Tail — group pivots at the base, cylinder extends up the +Y of the group
+      const tail = new THREE.Group();
+      const tailMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.03, 0.55, 6),
+        new THREE.MeshLambertMaterial({ color: FUR })
+      );
+      tailMesh.position.y = 0.275;
+      tail.add(tailMesh);
+      tail.position.set(0, 0.78, -0.3);
+      tail.rotation.x = -Math.PI / 3.5;
+      g.add(tail);
+
+      // Hero hi-ring
       let hiRing = null;
       if (spawn.isHero) {
         hiRing = new THREE.Mesh(
@@ -506,7 +576,12 @@
         hiRing.position.y = 0.05;
         g.add(hiRing);
       }
-      return { group: g, sprite, ring, hiRing };
+
+      return {
+        group: g, headSprite, ring, hiRing,
+        body, belly, tail,
+        leftArm, rightArm, leftLeg, rightLeg,
+      };
     }
 
     function makeGuard(spawn) {
@@ -737,22 +812,31 @@
       return m.emoji;
     }
 
-    // Two-phase heist: monkey's hand reaches toward the stash, swaps to a banana,
-    // then the banana arcs back to the thief and triggers onLand (score + chime).
+    // Single-phase heist: grab the *actual* top banana off the pile and arc it to the thief.
+    // The monkey's own right arm extension is handled in animateItems based on _stealProgress.
     function spawnStealAnim(thief, house, onLand) {
       const sgPos = new THREE.Vector3();
-      if (house.stashGroup) house.stashGroup.getWorldPosition(sgPos);
-      else sgPos.set(house.x, 0.5, house.z);
-      const mat = new THREE.SpriteMaterial({ map: emojiTexture('🤚', 128), transparent: true, depthWrite: false });
+      if (house.pileBananas && house.pileBananas.length > 0) {
+        const top = house.pileBananas[house.pileBananas.length - 1];
+        top.sprite.getWorldPosition(sgPos);
+        house.pileContainer.remove(top.sprite);
+        top.sprite.material.dispose();
+        house.pileBananas.pop();
+      } else if (house.pileContainer) {
+        house.pileContainer.getWorldPosition(sgPos);
+        sgPos.y += 0.4;
+      } else {
+        sgPos.set(house.x, 0.5, house.z);
+      }
+      const mat = new THREE.SpriteMaterial({ map: emojiTexture('🍌', 64), transparent: true, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.95, 0.95, 1);
-      sprite.position.set(thief.x, 1.2, thief.z);
+      sprite.scale.set(0.85, 0.85, 1);
+      sprite.position.set(sgPos.x, sgPos.y, sgPos.z);
       scene.add(sprite);
       stealAnims.push({
-        phase: 1, sprite, thief,
-        sx: thief.x, sy: 1.2, sz: thief.z,
-        tx: sgPos.x, ty: sgPos.y + 0.55, tz: sgPos.z,
-        t: 0, ttl: 0.26,
+        sprite, thief,
+        sx: sgPos.x, sy: sgPos.y, sz: sgPos.z,
+        t: 0, ttl: 0.42,
         onLand,
       });
     }
@@ -928,7 +1012,12 @@
         const sp = SPAWN[i];
         const h = makeHouse(sp);
         scene.add(h.group);
-        houses.push({ ownerIdx: i, x: sp.homeX, z: sp.homeZ, group: h.group, shield: h.shield, stashGroup: h.stashGroup, stealRing: h.stealRing });
+        houses.push({
+          ownerIdx: i, x: sp.homeX, z: sp.homeZ,
+          group: h.group, shield: h.shield, stealRing: h.stealRing,
+          pileContainer: h.pileContainer,
+          pileBananas: [],  // dynamic — synced to owner.score in animateItems
+        });
       }
       for (let i = 0; i < SPAWN.length; i++) {
         const sp = SPAWN[i];
@@ -940,9 +1029,15 @@
         m.group.position.set(sx, 0, sz);
         monkeys.push({
           ...sp,
-          mesh: m.group, sprite: m.sprite, ring: m.ring, hiRing: m.hiRing,
+          mesh: m.group, sprite: m.headSprite, ring: m.ring, hiRing: m.hiRing,
+          leftArm: m.leftArm, rightArm: m.rightArm,
+          leftLeg: m.leftLeg, rightLeg: m.rightLeg,
+          bodyMesh: m.body, tail: m.tail,
           x: sx, z: sz, vx: 0, vz: 0,
           heading: angle,
+          walkPhase: 0, idlePhase: Math.random() * Math.PI * 2,
+          visualRotY: Math.PI/2 - angle,
+          rightArmRot: 0,
           score: 0,
           freezeCharges: 0,
           freezeBoostUntil: 0,
@@ -959,6 +1054,8 @@
           chip: null,
           chipScoreEl: null,
         });
+        // Initial body orientation
+        m.group.rotation.y = Math.PI/2 - angle;
       }
       for (let i = 0; i < SPAWN.length; i++) {
         const sp = SPAWN[i];
@@ -1234,11 +1331,15 @@
           nz = t.z + (nz - t.z) / d * minD;
         }
       }
+      // Pile platform — soft circular block so monkeys don't stand inside the bananas
+      const PILE_BLOCK_R = 1.35;
       for (const h of houses) {
-        const lx = nx - h.x, lz = nz - h.z;
-        if (Math.abs(lx) < HOUSE_WALL_HALF && Math.abs(lz) < HOUSE_WALL_HALF) {
-          if (Math.abs(lx) > Math.abs(lz)) nx = h.x + Math.sign(lx || 1) * HOUSE_WALL_HALF;
-          else nz = h.z + Math.sign(lz || 1) * HOUSE_WALL_HALF;
+        const dd = dist2(nx, nz, h.x, h.z);
+        const minD = MONKEY_RADIUS + PILE_BLOCK_R;
+        if (dd < minD * minD) {
+          const d = Math.sqrt(dd) || 0.001;
+          nx = h.x + (nx - h.x) / d * minD;
+          nz = h.z + (nz - h.z) / d * minD;
         }
       }
       m.x = nx; m.z = nz;
@@ -1529,23 +1630,56 @@
         f.mesh.userData.sprite.position.y = 0.7 + Math.sin(f.mesh.userData.bobPhase) * 0.12;
         f.mesh.userData.ring.rotation.z += dt * 1.2;
       }
-      // Per-monkey personality: emoji swap + walk waddle / idle breath + dust puffs
+      // Per-monkey: face emoji swap, walk cycle on limbs, body rotation, steal arm reach
       for (const m of monkeys) {
+        // Emoji face
         const e = effectiveEmoji(m);
         if (m._currentEmoji !== e) {
           m.sprite.material.map = emojiTexture(e, 256);
           m._currentEmoji = e;
         }
         const vMag = Math.hypot(m.vx, m.vz);
-        m.spritePhase = (m.spritePhase || 0) + dt * (vMag > 0.5 ? 12 : 1.6);
-        if (vMag > 0.5) {
-          m.sprite.position.y = 1.05 + Math.abs(Math.sin(m.spritePhase)) * 0.20;
-          m.sprite.material.rotation = Math.sin(m.spritePhase * 0.5) * 0.18;
-        } else {
-          m.sprite.position.y = 1.05 + Math.sin(m.spritePhase) * 0.05;
-          m.sprite.material.rotation += (0 - m.sprite.material.rotation) * 0.2;
+        // Detect "currently channeling a steal" — find a target house if so
+        let stealHouse = null;
+        if (m._stealProgress) {
+          for (const key in m._stealProgress) {
+            if (m._stealProgress[key] > 0.01) { stealHouse = houses[parseInt(key)]; break; }
+          }
         }
-        // Dust puffs under fast feet (throttled per monkey)
+        // Body rotation: face heading normally, but face the pile while stealing
+        let targetHead = m.heading;
+        if (stealHouse) {
+          const hx = stealHouse.x - m.x, hz = stealHouse.z - m.z;
+          if (hx * hx + hz * hz > 1e-3) targetHead = Math.atan2(hz, hx);
+        }
+        const targetRot = Math.PI / 2 - targetHead;
+        let dr = targetRot - m.mesh.rotation.y;
+        while (dr >  Math.PI) dr -= Math.PI * 2;
+        while (dr < -Math.PI) dr += Math.PI * 2;
+        m.mesh.rotation.y += dr * Math.min(1, dt * 8);
+        // Phases
+        m.walkPhase = (m.walkPhase || 0) + dt * (vMag > 0.5 ? 12 : 0);
+        m.idlePhase = (m.idlePhase || 0) + dt * 2;
+        const moving = vMag > 0.5;
+        const legSwing = moving ? 0.55 : 0;
+        const armSwing = moving ? 0.4 : 0;
+        // Legs always do walk swing
+        m.leftLeg.rotation.x  =  Math.sin(m.walkPhase) * legSwing;
+        m.rightLeg.rotation.x = -Math.sin(m.walkPhase) * legSwing;
+        // Right arm: extended forward when stealing, otherwise normal walk swing
+        const targetArmRot = stealHouse ? (-Math.PI / 2) * 0.95 : Math.sin(m.walkPhase) * armSwing;
+        m.rightArmRot = (m.rightArmRot || 0) + (targetArmRot - (m.rightArmRot || 0)) * Math.min(1, dt * 14);
+        m.rightArm.rotation.x = m.rightArmRot;
+        // Left arm: walk swing always (opposite phase)
+        m.leftArm.rotation.x  = -Math.sin(m.walkPhase) * armSwing;
+        // Body bob (override the y=0 from moveMonkey)
+        const bob = moving
+          ? Math.abs(Math.sin(m.walkPhase)) * 0.06
+          : Math.sin(m.idlePhase) * 0.025;
+        m.mesh.position.y = bob;
+        // Tail wag
+        if (m.tail) m.tail.rotation.z = Math.sin(m.walkPhase * 0.5 + m.idlePhase * 0.3) * 0.3;
+        // Dust under fast feet
         if (vMag > 5 && elapsed - (m._lastDustAt || 0) > 0.07) {
           m._lastDustAt = elapsed;
           spawnDust(m.x, m.z);
@@ -1554,14 +1688,16 @@
       // Hero high-light ring rotates so they always find themselves easily
       const hero = monkeys[0];
       if (hero && hero.hiRing) hero.hiRing.rotation.z += dt * 0.8;
-      // Per-house: shield pulse, steal-ring color/visibility, stash shrinkage
+      // Per-house: shield pulse, steal-ring, and pile sync (add/remove banana sprites to match owner.score)
+      const PILE_MAX_VIS = 40;
       for (let i = 0; i < houses.length; i++) {
-        const sh = houses[i].shield;
+        const h = houses[i];
+        const sh = h.shield;
         if (sh.visible) sh.material.opacity = 0.22 + Math.sin(elapsed * 4 + i) * 0.06;
         const owner = monkeys[i];
         const stealable = owner && owner.score > 0 && !owner.shieldActive;
         const isOwn = owner && owner.isHero;
-        const ring = houses[i].stealRing;
+        const ring = h.stealRing;
         if (ring) {
           if (isOwn) {
             ring.visible = true;
@@ -1575,18 +1711,29 @@
             }
           }
         }
-        const sg = houses[i].stashGroup;
-        if (sg) {
-          sg.visible = !isOwn && owner && owner.score > 0;
-          if (sg.visible) {
-            sg.rotation.y += dt * 0.5;
-            // Show only as many bananas as the owner actually has (stash shrinks as you steal)
-            const visCount = Math.min(sg.children.length, Math.max(0, owner.score));
-            for (let bi = 0; bi < sg.children.length; bi++) {
-              const sp = sg.children[bi];
-              sp.visible = bi < visCount;
-              sp.position.y = 0.3 + (bi % 3) * 0.18 + Math.sin(elapsed * 2.5 + bi) * 0.08;
-            }
+        // Sync pile sprites to owner.score (clamped to a visible max)
+        const targetCount = Math.min(PILE_MAX_VIS, Math.max(0, owner ? owner.score : 0));
+        while (h.pileBananas.length < targetCount) {
+          const idx = h.pileBananas.length;
+          const sp = makeSprite(emojiTexture('🍌', 64), 0.55);
+          const pos = pilePosition(idx);
+          sp.position.set(pos.x, pos.y, pos.z);
+          sp.material.rotation = (idx * 0.71) % (Math.PI * 2);
+          h.pileContainer.add(sp);
+          h.pileBananas.push({ sprite: sp, addedAt: elapsed });
+        }
+        while (h.pileBananas.length > targetCount) {
+          const top = h.pileBananas.pop();
+          h.pileContainer.remove(top.sprite);
+          top.sprite.material.dispose();
+        }
+        // Subtle pile sway + per-banana micro-bob
+        if (h.pileContainer) {
+          h.pileContainer.rotation.y = Math.sin(elapsed * 0.6 + i) * 0.08;
+          for (let bi = 0; bi < h.pileBananas.length; bi++) {
+            const sp = h.pileBananas[bi].sprite;
+            const basePos = pilePosition(bi);
+            sp.position.y = basePos.y + Math.sin(elapsed * 2.4 + bi * 0.7) * 0.04;
           }
         }
       }
@@ -1602,47 +1749,26 @@
           }
         }
       }
-      // Two-phase heist anim: 🤚 hand reaches to stash, then 🍌 arcs back to thief
+      // Heist anim: the actual top-of-pile banana arcs to the thief's hand
       for (let i = stealAnims.length - 1; i >= 0; i--) {
         const a = stealAnims[i];
         a.t += dt;
-        if (a.phase === 1) {
-          // Hand reaching toward the stash (ease-in)
-          const u = Math.min(1, a.t / a.ttl);
-          const eu = u * u;
-          a.sprite.position.x = a.sx + (a.tx - a.sx) * eu;
-          a.sprite.position.y = a.sy + (a.ty - a.sy) * eu;
-          a.sprite.position.z = a.sz + (a.tz - a.sz) * eu;
-          a.sprite.material.rotation = u * 0.45;
-          if (u >= 1) {
-            // GRAB! Swap to banana and prepare return arc
-            a.sprite.material.map = emojiTexture('🍌', 64);
-            a.sprite.scale.set(0.85, 0.85, 1);
-            a.phase = 2; a.t = 0; a.ttl = 0.42;
-            a.sx = a.sprite.position.x;
-            a.sy = a.sprite.position.y;
-            a.sz = a.sprite.position.z;
-          }
-        } else {
-          // Banana arcing back to thief
-          const u = Math.min(1, a.t / a.ttl);
-          const eu = 1 - (1 - u) * (1 - u);
-          const tx = a.thief.x, ty = 1.5, tz = a.thief.z;
-          a.sprite.position.x = a.sx + (tx - a.sx) * eu;
-          a.sprite.position.z = a.sz + (tz - a.sz) * eu;
-          a.sprite.position.y = a.sy + (ty - a.sy) * eu + Math.sin(u * Math.PI) * 1.6;
-          a.sprite.material.rotation = u * Math.PI * 2;
-          // Final scale burst right before landing for "+1🍌" pop punch
-          const baseScale = 0.85;
-          const burst = u > 0.85 ? (1 + (u - 0.85) * 5) : 1;
-          a.sprite.scale.set(baseScale * burst, baseScale * burst, 1);
-          a.sprite.material.opacity = u < 0.9 ? 1 : Math.max(0, (1 - u) / 0.1);
-          if (u >= 1) {
-            if (a.onLand) a.onLand();
-            scene.remove(a.sprite);
-            a.sprite.material.dispose();
-            stealAnims.splice(i, 1);
-          }
+        const u = Math.min(1, a.t / a.ttl);
+        const eu = 1 - (1 - u) * (1 - u);
+        const tx = a.thief.x, ty = 1.4, tz = a.thief.z;
+        a.sprite.position.x = a.sx + (tx - a.sx) * eu;
+        a.sprite.position.z = a.sz + (tz - a.sz) * eu;
+        a.sprite.position.y = a.sy + (ty - a.sy) * eu + Math.sin(u * Math.PI) * 1.5;
+        a.sprite.material.rotation = u * Math.PI * 2;
+        const baseScale = 0.85;
+        const burst = u > 0.85 ? (1 + (u - 0.85) * 5) : 1;
+        a.sprite.scale.set(baseScale * burst, baseScale * burst, 1);
+        a.sprite.material.opacity = u < 0.9 ? 1 : Math.max(0, (1 - u) / 0.1);
+        if (u >= 1) {
+          if (a.onLand) a.onLand();
+          scene.remove(a.sprite);
+          a.sprite.material.dispose();
+          stealAnims.splice(i, 1);
         }
       }
       // Dust puffs — grow + fade
