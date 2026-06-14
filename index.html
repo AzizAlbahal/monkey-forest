@@ -480,12 +480,32 @@
       };
     }
 
-    // Full 3D monkey: body + 4 limbs + tail, with an emoji sprite as the face
+    // Fully built 3D monkey: pear torso + neck/shoulders + sphere head with muzzle/ears,
+    // jointed arms (elbow) and legs (knee) with proper feet, multi-segment curly tail,
+    // accent-colored collar, and a back-side dark shell for a cartoon outline.
     function makeMonkey(spawn) {
       const g = new THREE.Group();
       const FUR = 0x6b4423;
       const BELLY = 0xc9a07a;
+      const MUZZLE = 0xd9a585;
+      const INNER_EAR = 0xd99a8a;
+      const OUTLINE = 0x1a0c08;
+      const accent = spawn.color;
 
+      const furMat = new THREE.MeshLambertMaterial({ color: FUR });
+      const bellyMat = new THREE.MeshLambertMaterial({ color: BELLY });
+      const muzzleMat = new THREE.MeshLambertMaterial({ color: MUZZLE });
+      const innerEarMat = new THREE.MeshLambertMaterial({ color: INNER_EAR });
+      const collarMat = new THREE.MeshLambertMaterial({ color: accent });
+      const outlineMat = new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide });
+
+      function addOutline(parent, scale = 1.06) {
+        const o = new THREE.Mesh(parent.geometry, outlineMat);
+        o.scale.set(scale, scale, scale);
+        parent.add(o);
+      }
+
+      // === Shadow + color ring ===
       const shadow = new THREE.Mesh(
         new THREE.CircleGeometry(0.7, 18),
         new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false })
@@ -496,76 +516,211 @@
 
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.7, 0.95, 28),
-        new THREE.MeshBasicMaterial({ color: spawn.color, side: THREE.DoubleSide })
+        new THREE.MeshBasicMaterial({ color: accent, side: THREE.DoubleSide })
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.04;
       g.add(ring);
 
-      // Torso
-      const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.32, 0.45, 4, 8),
-        new THREE.MeshLambertMaterial({ color: FUR })
-      );
-      body.position.y = 0.9;
-      g.add(body);
+      // === TORSO group (shoulders + arms twist with it during walk) ===
+      const bodyGroup = new THREE.Group();
+      bodyGroup.position.y = 0.88;
+      g.add(bodyGroup);
 
-      // Belly patch (front, lighter)
+      const torso = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.32, 0.18, 4, 12),
+        furMat
+      );
+      bodyGroup.add(torso);
+      addOutline(torso);
+
       const belly = new THREE.Mesh(
-        new THREE.SphereGeometry(0.28, 12, 8),
-        new THREE.MeshLambertMaterial({ color: BELLY })
+        new THREE.SphereGeometry(0.32, 14, 10),
+        bellyMat
       );
-      belly.position.set(0, 0.78, 0.18);
-      belly.scale.set(1, 1.1, 0.7);
-      g.add(belly);
+      belly.position.set(0, -0.06, 0.13);
+      belly.scale.set(1.0, 0.9, 0.65);
+      bodyGroup.add(belly);
 
-      // Head sprite — emoji face that always faces the camera and swaps with state
-      const headSprite = makeSprite(emojiTexture(spawn.emoji, 256), 1.0);
-      headSprite.position.y = 1.55;
-      g.add(headSprite);
+      // Owner-colored collar — strong character identity
+      const collar = new THREE.Mesh(
+        new THREE.TorusGeometry(0.21, 0.05, 8, 20),
+        collarMat
+      );
+      collar.position.y = 0.3;
+      collar.rotation.x = Math.PI / 2;
+      bodyGroup.add(collar);
 
-      // Arm helper: group pivots at shoulder; geometry hangs down
-      function makeLimb(side, kind) {
-        const grp = new THREE.Group();
-        const upperLen = kind === 'arm' ? 0.5 : 0.55;
-        const upperR  = kind === 'arm' ? 0.09 : 0.11;
-        const handR   = kind === 'arm' ? 0.12 : 0.14;
+      // Shoulder spheres — round the arm seams so they don't look snapped on
+      const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), furMat);
+      shoulderL.position.set(-0.3, 0.16, 0);
+      bodyGroup.add(shoulderL);
+      const shoulderR = shoulderL.clone();
+      shoulderR.position.x = 0.3;
+      bodyGroup.add(shoulderR);
+
+      // Neck
+      const neck = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.13, 0.16, 0.14, 12),
+        furMat
+      );
+      neck.position.y = 0.37;
+      bodyGroup.add(neck);
+
+      // === HEAD group ===
+      const headGroup = new THREE.Group();
+      headGroup.position.y = 1.45;
+      g.add(headGroup);
+
+      const headBall = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 18, 14),
+        furMat
+      );
+      headBall.scale.set(1.0, 0.96, 0.95);
+      headGroup.add(headBall);
+      addOutline(headBall);
+
+      // Muzzle — gives the head depth in profile and a place to attach the face
+      const muzzle = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 14, 10),
+        muzzleMat
+      );
+      muzzle.position.set(0, -0.05, 0.23);
+      muzzle.scale.set(1.0, 0.72, 0.88);
+      headGroup.add(muzzle);
+
+      // Ears — rounded flat disks, flanking the head
+      const earL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), furMat);
+      earL.position.set(-0.29, 0.13, -0.02);
+      earL.scale.set(1, 1, 0.5);
+      headGroup.add(earL);
+      const earR = earL.clone();
+      earR.position.x = 0.29;
+      headGroup.add(earR);
+      const innerL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), innerEarMat);
+      innerL.position.set(-0.3, 0.13, 0.02);
+      innerL.scale.set(1, 1, 0.3);
+      headGroup.add(innerL);
+      const innerR = innerL.clone();
+      innerR.position.x = 0.3;
+      headGroup.add(innerR);
+
+      // Face emoji — smaller now, projected onto the muzzle (still swaps with state)
+      const headSprite = makeSprite(emojiTexture(spawn.emoji, 256), 0.45);
+      headSprite.position.set(0, -0.05, 0.42);
+      headGroup.add(headSprite);
+
+      // === ARMS — segmented at the elbow, pre-curled at rest ===
+      function makeArm(side) {
+        const shoulder = new THREE.Group();
+        shoulder.position.set(side * 0.3, 0.16, 0);
+        shoulder.rotation.z = side * -0.1; // subtle outward splay so arms don't clip the torso
+
         const upper = new THREE.Mesh(
-          new THREE.CylinderGeometry(upperR, upperR * 0.85, upperLen, 6),
-          new THREE.MeshLambertMaterial({ color: FUR })
+          new THREE.CylinderGeometry(0.085, 0.075, 0.26, 8),
+          furMat
         );
-        upper.position.y = -upperLen / 2;
-        grp.add(upper);
-        const tip = new THREE.Mesh(
-          new THREE.SphereGeometry(handR, 8, 6),
-          new THREE.MeshLambertMaterial({ color: FUR })
+        upper.position.y = -0.13;
+        shoulder.add(upper);
+
+        const elbow = new THREE.Group();
+        elbow.position.y = -0.26;
+        elbow.rotation.x = 0.4; // rest curl
+        shoulder.add(elbow);
+
+        const forearm = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.075, 0.065, 0.24, 8),
+          furMat
         );
-        tip.position.y = -upperLen - 0.05;
-        grp.add(tip);
-        const x = side * (kind === 'arm' ? 0.42 : 0.18);
-        const y = kind === 'arm' ? 1.1 : 0.62;
-        grp.position.set(x, y, 0);
-        return grp;
+        forearm.position.y = -0.12;
+        elbow.add(forearm);
+
+        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), furMat);
+        hand.position.y = -0.26;
+        elbow.add(hand);
+
+        return { shoulder, elbow };
       }
-      const leftArm  = makeLimb(-1, 'arm');
-      const rightArm = makeLimb(+1, 'arm');
-      const leftLeg  = makeLimb(-1, 'leg');
-      const rightLeg = makeLimb(+1, 'leg');
-      g.add(leftArm); g.add(rightArm); g.add(leftLeg); g.add(rightLeg);
 
-      // Tail — group pivots at the base, cylinder extends up the +Y of the group
-      const tail = new THREE.Group();
-      const tailMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.03, 0.55, 6),
-        new THREE.MeshLambertMaterial({ color: FUR })
+      // === LEGS — slimmer, segmented at knee, with forward-stretched feet ===
+      function makeLeg(side) {
+        const hip = new THREE.Group();
+        hip.position.set(side * 0.17, 0.6, 0);
+
+        const thigh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.11, 0.09, 0.3, 8),
+          furMat
+        );
+        thigh.position.y = -0.15;
+        hip.add(thigh);
+
+        const knee = new THREE.Group();
+        knee.position.y = -0.3;
+        knee.rotation.x = 0.2; // rest curl
+        hip.add(knee);
+
+        const shin = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.09, 0.08, 0.26, 8),
+          furMat
+        );
+        shin.position.y = -0.13;
+        knee.add(shin);
+
+        const foot = new THREE.Mesh(
+          new THREE.SphereGeometry(0.11, 12, 8),
+          furMat
+        );
+        foot.position.set(0, -0.27, 0.04);
+        foot.scale.set(1, 0.55, 1.7); // stretched forward → reads as foot
+        knee.add(foot);
+
+        return { hip, knee };
+      }
+
+      const la = makeArm(-1), ra = makeArm(+1);
+      const ll = makeLeg(-1), rl = makeLeg(+1);
+      // Arms inside bodyGroup so they twist with the shoulders during walk
+      bodyGroup.add(la.shoulder, ra.shoulder);
+      g.add(ll.hip, rl.hip);
+
+      // === TAIL: 3 curly segments (question-mark shape) ===
+      const tailBase = new THREE.Group();
+      tailBase.position.set(0, 0.82, -0.28);
+      tailBase.rotation.x = -Math.PI / 3.2;
+      g.add(tailBase);
+
+      const tailSeg1 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.055, 0.26, 6),
+        furMat
       );
-      tailMesh.position.y = 0.275;
-      tail.add(tailMesh);
-      tail.position.set(0, 0.78, -0.3);
-      tail.rotation.x = -Math.PI / 3.5;
-      g.add(tail);
+      tailSeg1.position.y = 0.13;
+      tailBase.add(tailSeg1);
 
-      // Hero hi-ring
+      const tailSeg2Group = new THREE.Group();
+      tailSeg2Group.position.y = 0.26;
+      tailSeg2Group.rotation.x = 0.45;
+      tailBase.add(tailSeg2Group);
+
+      const tailSeg2 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.04, 0.24, 6),
+        furMat
+      );
+      tailSeg2.position.y = 0.12;
+      tailSeg2Group.add(tailSeg2);
+
+      const tailSeg3Group = new THREE.Group();
+      tailSeg3Group.position.y = 0.24;
+      tailSeg3Group.rotation.x = 0.55;
+      tailSeg2Group.add(tailSeg3Group);
+
+      const tailSeg3 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.025, 0.22, 6),
+        furMat
+      );
+      tailSeg3.position.y = 0.11;
+      tailSeg3Group.add(tailSeg3);
+
+      // === Hero hi-ring (gold glow under the player monkey) ===
       let hiRing = null;
       if (spawn.isHero) {
         hiRing = new THREE.Mesh(
@@ -579,8 +734,12 @@
 
       return {
         group: g, headSprite, ring, hiRing,
-        body, belly, tail,
-        leftArm, rightArm, leftLeg, rightLeg,
+        bodyGroup, torso, belly, headGroup, tailBase,
+        leftArm: la.shoulder, rightArm: ra.shoulder,
+        leftForearm: la.elbow, rightForearm: ra.elbow,
+        leftLeg: ll.hip, rightLeg: rl.hip,
+        leftShin: ll.knee, rightShin: rl.knee,
+        tailSeg2Group, tailSeg3Group,
       };
     }
 
@@ -1030,9 +1189,13 @@
         monkeys.push({
           ...sp,
           mesh: m.group, sprite: m.headSprite, ring: m.ring, hiRing: m.hiRing,
+          bodyGroup: m.bodyGroup, torso: m.torso, belly: m.belly,
+          headGroup: m.headGroup,
           leftArm: m.leftArm, rightArm: m.rightArm,
+          leftForearm: m.leftForearm, rightForearm: m.rightForearm,
           leftLeg: m.leftLeg, rightLeg: m.rightLeg,
-          bodyMesh: m.body, tail: m.tail,
+          leftShin: m.leftShin, rightShin: m.rightShin,
+          tail: m.tailBase, tailSeg2Group: m.tailSeg2Group, tailSeg3Group: m.tailSeg3Group,
           x: sx, z: sz, vx: 0, vz: 0,
           heading: angle,
           walkPhase: 0, idlePhase: Math.random() * Math.PI * 2,
@@ -1662,23 +1825,51 @@
         m.idlePhase = (m.idlePhase || 0) + dt * 2;
         const moving = vMag > 0.5;
         const legSwing = moving ? 0.55 : 0;
-        const armSwing = moving ? 0.4 : 0;
-        // Legs always do walk swing
-        m.leftLeg.rotation.x  =  Math.sin(m.walkPhase) * legSwing;
-        m.rightLeg.rotation.x = -Math.sin(m.walkPhase) * legSwing;
-        // Right arm: extended forward when stealing, otherwise normal walk swing
-        const targetArmRot = stealHouse ? (-Math.PI / 2) * 0.95 : Math.sin(m.walkPhase) * armSwing;
+        const armSwing = moving ? 0.45 : 0;
+        // Legs: hip swing + knee flex on the lift phase
+        const lWalk = Math.sin(m.walkPhase), rWalk = -Math.sin(m.walkPhase);
+        m.leftLeg.rotation.x  = lWalk * legSwing;
+        m.rightLeg.rotation.x = rWalk * legSwing;
+        if (m.leftShin)  m.leftShin.rotation.x  = 0.2 + Math.max(0, -lWalk) * 0.45;
+        if (m.rightShin) m.rightShin.rotation.x = 0.2 + Math.max(0, -rWalk) * 0.45;
+        // Right arm: steal reach OR walk swing (counter-leg phase, so right arm forward when left leg forward)
+        const targetArmRot = stealHouse ? (-Math.PI / 2) * 0.95 : -lWalk * armSwing;
         m.rightArmRot = (m.rightArmRot || 0) + (targetArmRot - (m.rightArmRot || 0)) * Math.min(1, dt * 14);
         m.rightArm.rotation.x = m.rightArmRot;
-        // Left arm: walk swing always (opposite phase)
-        m.leftArm.rotation.x  = -Math.sin(m.walkPhase) * armSwing;
+        // Forearm: small flex on reach, gentle elbow swing while walking
+        if (m.rightForearm) {
+          const fTarget = stealHouse ? 0.15 : (0.4 + Math.sin(m.walkPhase + 0.4) * 0.12);
+          m.rightForearm.rotation.x += (fTarget - m.rightForearm.rotation.x) * Math.min(1, dt * 10);
+        }
+        // Left arm: swing opposite of the right
+        m.leftArm.rotation.x = -rWalk * armSwing;
+        if (m.leftForearm) m.leftForearm.rotation.x = 0.4 + Math.sin(m.walkPhase + Math.PI + 0.4) * 0.12;
+        // Body twist: shoulders rotate slightly with the walk
+        if (m.bodyGroup) m.bodyGroup.rotation.y = lWalk * 0.1;
         // Body bob (override the y=0 from moveMonkey)
         const bob = moving
-          ? Math.abs(Math.sin(m.walkPhase)) * 0.06
+          ? Math.abs(Math.sin(m.walkPhase)) * 0.08
           : Math.sin(m.idlePhase) * 0.025;
         m.mesh.position.y = bob;
-        // Tail wag
-        if (m.tail) m.tail.rotation.z = Math.sin(m.walkPhase * 0.5 + m.idlePhase * 0.3) * 0.3;
+        // Head bob: nods on each footfall while walking, gentle sway at rest
+        if (m.headGroup) {
+          if (moving) {
+            m.headGroup.rotation.x = Math.abs(Math.sin(m.walkPhase * 2)) * 0.06;
+            m.headGroup.rotation.z = lWalk * -0.04;
+          } else {
+            m.headGroup.rotation.x += (0 - m.headGroup.rotation.x) * 0.2;
+            m.headGroup.rotation.z = Math.sin(m.idlePhase * 0.7) * 0.06;
+          }
+        }
+        // Idle breathing — belly expands gently when standing still
+        if (m.belly) {
+          const breath = moving ? 0.9 : (0.9 + Math.sin(m.idlePhase) * 0.05);
+          m.belly.scale.y = breath;
+        }
+        // Tail wag — propagate down 3 segments for a lively curl
+        if (m.tail)           m.tail.rotation.z = Math.sin(m.walkPhase * 0.5 + m.idlePhase * 0.3) * 0.3;
+        if (m.tailSeg2Group)  m.tailSeg2Group.rotation.z = Math.sin(m.walkPhase * 0.5 + 0.5) * 0.28;
+        if (m.tailSeg3Group)  m.tailSeg3Group.rotation.z = Math.sin(m.walkPhase * 0.5 + 1.0) * 0.34;
         // Dust under fast feet
         if (vMag > 5 && elapsed - (m._lastDustAt || 0) > 0.07) {
           m._lastDustAt = elapsed;
